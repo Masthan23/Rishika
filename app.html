@@ -192,6 +192,17 @@
         .finp:focus { border-color:var(--p); box-shadow:0 0 0 4px rgba(102,126,234,.1); }
         .iico { position:absolute; left:14px; top:50%; transform:translateY(-50%); font-size:1.05rem; pointer-events:none; }
         .hint { margin-top:6px; font-size:.75rem; color:var(--muted); display:flex; align-items:center; gap:4px; }
+        /* DATE INPUT BUTTON STYLING */
+        .date-btn-wrap { position:relative; cursor:pointer; display:flex; align-items:center; }
+        .date-btn-wrap input[type="date"] { width:100%; padding:14px 46px 14px 46px; background:linear-gradient(135deg,rgba(102,126,234,.08),rgba(102,126,234,.04)); border:2px solid var(--p); border-radius:var(--rs); color:var(--txt); font-size:16px; outline:none; transition:var(--tr); cursor:pointer; font-weight:600; text-align:center; }
+        .date-btn-wrap input[type="date"]::-webkit-calendar-picker-indicator { display:none; }
+        .date-btn-wrap input[type="date"]::placeholder { color:var(--p); }
+        .date-btn-wrap input[type="date"]:hover { border-color:var(--p); box-shadow:0 4px 16px rgba(102,126,234,.25); transform:translateY(-1px); }
+        .date-btn-wrap input[type="date"]:focus { border-color:var(--p); box-shadow:0 0 0 4px rgba(102,126,234,.2); }
+        .date-btn-wrap input[type="date"]::-webkit-outer-spin-button,
+        .date-btn-wrap input[type="date"]::-webkit-inner-spin-button { display:none; }
+        .date-btn-wrap::before { content:'📅'; position:absolute; left:16px; top:50%; transform:translateY(-50%); font-size:1.2rem; pointer-events:none; }
+        .date-btn-wrap::after { content:''; position:absolute; right:14px; top:50%; transform:translateY(-50%); width:20px; height:20px; pointer-events:none; opacity:0.6; background:var(--p); clip-path:polygon(50% 0%,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%); }
 
         /* BUTTONS */
         .btn { padding:14px 22px; border-radius:var(--rs); font-size:.93rem; font-weight:700; cursor:pointer; border:none; transition:var(--tr); display:inline-flex; align-items:center; justify-content:center; gap:8px; text-decoration:none; touch-action:manipulation; user-select:none; }
@@ -1163,16 +1174,14 @@
                     <div class="frow">
                         <div class="fgrp">
                             <label class="flbl">📅 From Date</label>
-                            <div class="iw">
-                                <span class="iico">🗓️</span>
-                                <input type="date" class="finp" id="lvFrom" style="padding-left:46px;" onchange="calcLeaveDays()"/>
+                            <div class="date-btn-wrap">
+                                <input type="date" id="lvFrom" onchange="calcLeaveDays()"/>
                             </div>
                         </div>
                         <div class="fgrp">
                             <label class="flbl">📅 To Date</label>
-                            <div class="iw">
-                                <span class="iico">🗓️</span>
-                                <input type="date" class="finp" id="lvTo" style="padding-left:46px;" onchange="calcLeaveDays()"/>
+                            <div class="date-btn-wrap">
+                                <input type="date" id="lvTo" onchange="calcLeaveDays()"/>
                             </div>
                         </div>
                     </div>
@@ -1260,7 +1269,7 @@
     applyTheme(currentTheme);
 
     // ===== CONSTANTS =====
-    const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzk-1uzsKJRGcvqc8_CE4UGdUhIZL62Caar5ZYxpvcYV6lgchz2MfsMlMdlrJXDtMVX/exec';
+    const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxwI29mIbT7laClnq7DaTC-QKpLMPCCmOwiMu86BE58W0zGtXQUuXQLuWbqs9sZ_Q/exec';
     const TIMEOUT_MS = 12000;
     const ALLOWED_DOMAINS = ['@dashverse.ai', '@dashversemail.com', '@dashtoon.com'];
     const POLICY = { YEARLY_LIMIT:18, MONTHLY_LIMIT:2, ABSENT_WARN_THRESHOLD:2 };
@@ -1435,7 +1444,9 @@
         document.addEventListener('click',e=>{
             if(!e.target.closest('#empProjWrap'))closeEmpMS();
         });
+        initDateButtonListeners();
     });
+    function initDateButtonListeners(){document.querySelectorAll('.date-btn-wrap').forEach(wrapper=>{const input=wrapper.querySelector('input[type="date"]');if(input){wrapper.style.cursor='pointer';wrapper.addEventListener('click',e=>{if(e.target!==input){input.click();input.showPicker&&input.showPicker();}});}})};
 
     async function checkConnFast(){
         const el=document.getElementById('connStatus');

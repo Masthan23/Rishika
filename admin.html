@@ -137,6 +137,17 @@
         .finp:focus { border-color:var(--p); box-shadow:0 0 0 3px rgba(102,126,234,.14) }
         .finp::placeholder { color:var(--muted); opacity:.7 }
         .iico { position:absolute; left:13px; top:50%; transform:translateY(-50%); font-size:1rem; pointer-events:none }
+        /* DATE INPUT BUTTON STYLING */
+        .date-btn-wrap { position:relative; cursor:pointer; display:flex; align-items:center; }
+        .date-btn-wrap input[type="date"] { width:100%; padding:12px 44px 12px 44px; background:linear-gradient(135deg,rgba(102,126,234,.08),rgba(102,126,234,.04)); border:2px solid var(--p); border-radius:var(--rs); color:var(--txt); font-size:16px; outline:none; transition:var(--tr); cursor:pointer; font-weight:600; text-align:center; }
+        .date-btn-wrap input[type="date"]::-webkit-calendar-picker-indicator { display:none; }
+        .date-btn-wrap input[type="date"]::placeholder { color:var(--p); }
+        .date-btn-wrap input[type="date"]:hover { border-color:var(--p); box-shadow:0 4px 16px rgba(102,126,234,.2); transform:translateY(-1px); }
+        .date-btn-wrap input[type="date"]:focus { border-color:var(--p); box-shadow:0 0 0 3px rgba(102,126,234,.18); }
+        .date-btn-wrap input[type="date"]::-webkit-outer-spin-button,
+        .date-btn-wrap input[type="date"]::-webkit-inner-spin-button { display:none; }
+        .date-btn-wrap::before { content:'\1f4c5'; position:absolute; left:14px; top:50%; transform:translateY(-50%); font-size:1.1rem; pointer-events:none; }
+        .date-btn-wrap::after { content:''; position:absolute; right:12px; top:50%; transform:translateY(-50%); width:18px; height:18px; pointer-events:none; opacity:0.5; background:var(--p); clip-path:polygon(50% 0%,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%); }
 
         /* BUTTONS */
         .btn { padding:11px 20px; border-radius:var(--rs); font-size:.9rem; font-weight:700; cursor:pointer; border:none; transition:var(--tr); display:inline-flex; align-items:center; justify-content:center; gap:7px; touch-action:manipulation; user-select:none }
@@ -686,9 +697,11 @@
                     <div class="card">
                         <div class="card-hdr">
                             <div class="card-t">✅ Attendance Log</div>
-                            <div class="sb-bar">
+                                <div class="sb-bar">
                                 <div class="sw"><input type="text" class="sinp" id="attSrch" placeholder="Search..." oninput="filterAtt()"/></div>
-                                <input type="date" class="sinp" id="attDate" style="padding-left:12px;min-width:140px;" onchange="filterAtt()"/>
+                                <div class="date-btn-wrap" style="min-width:140px;">
+                                    <input type="date" id="attDate" onchange="filterAtt()"/>
+                                </div>
                                 <select class="fsel2" id="attDeptFil" onchange="filterAtt()">
                                     <option value="">All Departments</option>
                                     <option>Engineering</option><option>Design</option><option>Product</option>
@@ -941,7 +954,7 @@
                         <option value="Intern">🎓 Intern</option>
                     </select>
                 </div>
-                <div class="fgrp"><label class="flbl">Join Date</label><input type="date" class="finp" id="mJoin"/></div>
+                <div class="fgrp"><label class="flbl">Join Date</label><div class="date-btn-wrap"><input type="date" id="mJoin"/></div></div>
             </div>
 
             <!-- WORK MODE SECTION -->
@@ -973,8 +986,8 @@
             <div class="contract-section" id="contractSection">
                 <div class="contract-section-title">📄 Contract / Duration Details</div>
                 <div class="frow">
-                    <div class="fgrp"><label class="flbl">Contract Start</label><input type="date" class="finp" id="mContractStart"/></div>
-                    <div class="fgrp"><label class="flbl">Contract End</label><input type="date" class="finp" id="mContractEnd" onchange="calcContractDays()"/></div>
+                    <div class="fgrp"><label class="flbl">Contract Start</label><div class="date-btn-wrap"><input type="date" id="mContractStart"/></div></div>
+                    <div class="fgrp"><label class="flbl">Contract End</label><div class="date-btn-wrap"><input type="date" id="mContractEnd" onchange="calcContractDays()"/></div></div>
                 </div>
                 <div class="frow">
                     <div class="fgrp"><label class="flbl">Total Days</label><input type="number" class="finp" id="mContractDays" placeholder="Auto-calculated" min="1" oninput="onContractDaysInput()"/></div>
@@ -1073,7 +1086,7 @@
         applyTheme(currentTheme);
 
         // ===== CONSTANTS =====
-        const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzk-1uzsKJRGcvqc8_CE4UGdUhIZL62Caar5ZYxpvcYV6lgchz2MfsMlMdlrJXDtMVX/exec';
+        const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxwI29mIbT7laClnq7DaTC-QKpLMPCCmOwiMu86BE58W0zGtXQUuXQLuWbqs9sZ_Q/exec';
         const TIMEOUT_MS = 12000;
         const ALLOWED_DOMAINS = ['@dashverse.ai', '@dashversemail.com', '@dashtoon.com'];
         const EMP_TYPES = {
@@ -1266,7 +1279,8 @@
         function logout(){sessionStorage.removeItem('hrOk');CACHE.clearAll();dataLoaded=false;document.getElementById('loginPg').style.display='flex';document.getElementById('adminApp').classList.remove('on');document.getElementById('aUser').value='';document.getElementById('aPass').value='';checkConn();}
         function navigateToPortal(dest,flagKey){sessionStorage.setItem(flagKey,'1');sessionStorage.setItem('fromIndexPage','1');window.location.href=dest;}
         function loginMsg(msg,type){const cls={ok:'al-ok',err:'al-err',warn:'al-warn'};document.getElementById('loginAlert').innerHTML=`<div class="alert ${cls[type]}">${msg}</div>`;setTimeout(()=>document.getElementById('loginAlert').innerHTML='',3500);}
-        function initAdmin(){ticker();setInterval(ticker,1000);document.getElementById('todayLbl').textContent=new Date().toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'});updateModeUI();if(!dataLoaded)loadAll();}
+        function initAdmin(){ticker();setInterval(ticker,1000);document.getElementById('todayLbl').textContent=new Date().toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'});updateModeUI();if(!dataLoaded)loadAll();initDateButtonListeners();}
+        function initDateButtonListeners(){document.querySelectorAll('.date-btn-wrap').forEach(wrapper=>{const input=wrapper.querySelector('input[type="date"]');if(input){wrapper.style.cursor='pointer';wrapper.addEventListener('click',e=>{if(e.target!==input){input.click();input.showPicker&&input.showPicker();}});}})};
         function updateModeUI(){const lbl=document.getElementById('modeLabel');if(lbl)lbl.textContent=isLive?'Google Sheets Live':'Local Mode'}
         function ticker(){const el=document.getElementById('admClk');if(el)el.textContent=new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',second:'2-digit'})}
         function openSB(){document.getElementById('sb').classList.add('open');document.getElementById('sbOverlay').classList.add('on');document.body.style.overflow='hidden'}

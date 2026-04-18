@@ -90,6 +90,8 @@ function handleAction(action, data) {
     case 'saveProjects':      return saveProjects(data);
     case 'assignProject':     return assignProject(data);
     case 'getManagers':       return getManagers();
+    case 'validateManagerProfile': return validateManagerProfile(data.email, data.role);
+    case 'debugManagerProfile': return debugManagerProfile(data.email);
     case 'addManager':        return addManager(data);
     case 'updateManager':     return updateManager(data);
     case 'deleteManager':     return deleteManager(data.email);
@@ -702,6 +704,94 @@ function getManagers() {
   }
 
   return { success: true, managers: managers };
+}
+
+function debugManagerProfile(email) {
+  const normalizedEmail = normalizeEmail(email);
+  const ss = SpreadsheetApp.openById(SHEET_ID);
+  let sheet = ss.getSheetByName('Managers');
+  
+  if (!sheet) {
+    setupSheets();
+    sheet = ss.getSheetByName('Managers');
+  }
+  
+  const hdr = getManagerHeaders(sheet);
+  const lastRow = sheet.getLastRow();
+  const rows = sheet.getRange(2, 1, lastRow - 1, sheet.getLastColumn()).getValues();
+  
+  const allManagers = [];
+  for (let i = 0; i < rows.length; i++) {
+    const mgrEmail = normalizeEmail(getValueByHeader(rows[i], hdr, 'email', 3));
+    const mgrType = (getValueByHeader(rows[i], hdr, 'managertype', 1) || '').toLowerCase().trim();
+    const mgrName = getValueByHeader(rows[i], hdr, 'name', 1) || '';
+    
+    allManagers.push({
+      row: i + 2,
+      name: mgrName,
+      email: mgrEmail,
+      emailRaw: getValueByHeader(rows[i], hdr, 'email', 3),
+      managerType: mgrType,
+      exactMatch: mgrEmail === normalizedEmail
+    });
+  }
+  
+  return {
+    searchingFor: normalizedEmail,
+    allManagers: allManagers,
+    totalManagers: allManagers.length,
+    headers: hdr
+  };
+}
+
+function validateManagerProfile(email, role) {
+  if (!email) return { success: false, message: 'Email is required' };
+  
+  const normalizedEmail = normalizeEmail(email);
+  if (!normalizedEmail) return { success: false, message: 'Invalid email format' };
+  
+  const ss = SpreadsheetApp.openById(SHEET_ID);
+  let sheet = ss.getSheetByName('Managers');
+  
+  if (!sheet) {
+    setupSheets();
+    sheet = ss.getSheetByName('Managers');
+  }
+  
+  if (!sheet || sheet.getLastRow() < 2) {
+    return { success: false, message: 'Manager profile not found. Please contact HR.' };
+  }
+  
+  const lastRow = sheet.getLastRow();
+  const rows = sheet.getRange(2, 1, lastRow - 1, sheet.getLastColumn()).getValues();
+  const hdr = getManagerHeaders(sheet);
+  
+  // Log for debugging
+  Logger.log('Searching for email: ' + normalizedEmail + ' with role: ' + role);
+  
+  for (let i = 0; i < rows.length; i++) {
+    const emailVal = getValueByHeader(rows[i], hdr, 'email', 3);
+    const mgrEmail = normalizeEmail(emailVal);
+    const mgrTypeVal = getValueByHeader(rows[i], hdr, 'managertype', 1) || '';
+    const mgrType = mgrTypeVal.toString().toLowerCase().trim();
+    
+    Logger.log('Row ' + (i+2) + ': Email=' + mgrEmail + ', Type=' + mgrType);
+    
+    if (mgrEmail === normalizedEmail) {
+      Logger.log('Found matching email! Checking role...');
+      const normalizedRole = (role || '').toLowerCase().trim();
+      if (!role || mgrType === normalizedRole) {
+        Logger.log('Role matches! Access granted.');
+        return { success: true, message: 'Profile validated', manager: buildManagerObject(rows[i], hdr) };
+      } else {
+        Logger.log('Role mismatch. Manager type: ' + mgrType + ', Expected: ' + normalizedRole);
+        return { success: false, message: `Your profile is registered as '${mgrType}', but trying to login as '${role}'. Please select the correct role.` };
+      }
+    }
+  }
+  
+  Logger.log('No matching email found in database');
+  return { success: false, message: 'Your profile is not registered as a manager. Please contact HR.' };
 }
 
 function addManager(data) {
