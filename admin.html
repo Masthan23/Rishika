@@ -258,7 +258,9 @@
         .login-home-btn:hover { transform:scale(1.08) translateY(-1px); box-shadow:0 14px 32px rgba(232,121,249,.38); }
         .login-home-btn:active { transform:scale(.94); }
         .tb-l { display:flex; align-items:center; gap:0; padding-left:40px; }
-        .topbar { background:var(--tb-bg); backdrop-filter:blur(22px); border-bottom:1px solid var(--gb); padding:0 24px; padding-top:var(--sat); height:calc(60px + var(--sat)); display:flex; align-items:center; justify-content:space-between; position:sticky; top:0; z-index:40; box-shadow:0 1px 12px rgba(232,121,249,.08) }
+        .tb-title-wrap { display:flex; align-items:center; gap:12px; flex-wrap:wrap }
+        .tb-emp-stats { display:none; align-items:center; gap:8px; flex-wrap:wrap }
+        .topbar { background:var(--tb-bg); backdrop-filter:blur(22px); border-bottom:1px solid var(--gb); padding:0 24px; padding-top:var(--sat); min-height:calc(60px + var(--sat)); display:flex; align-items:center; justify-content:space-between; position:sticky; top:0; z-index:40; box-shadow:0 1px 12px rgba(232,121,249,.08) }
         .tb-l h2 { font-size:1.1rem; font-weight:800; color:var(--txt) }
         .tb-l p { font-size:.73rem; color:var(--muted) }
         .tb-r { display:flex; align-items:center; gap:10px }
@@ -527,8 +529,9 @@
             .sb.open { transform:translateX(0) }
             .adm-main { margin-left:0 }
             .ham { display:flex; align-items:center; justify-content:center }
-            .topbar { padding:0 12px; padding-top:var(--sat); height:calc(56px + var(--sat)) }
+            .topbar { padding:0 12px; padding-top:var(--sat); min-height:calc(56px + var(--sat)) }
             .tb-l { padding-left:94px }
+            .tb-title-wrap { align-items:flex-start }
             .adm-cnt { padding:12px }
             .frow { grid-template-columns:1fr }
             .st-grid { grid-template-columns:1fr 1fr }
@@ -731,9 +734,15 @@
             <div class="topbar">
                 <div class="tb-l">
                     <button class="go-home-btn" onclick="window.location.href='app.html'" title="Go to Home">🏠</button>
-                    <div>
-                        <h2 id="panelTitle">HR Dashboard</h2>
-                        <p id="panelSub">Human Resources Panel</p>
+                    <div class="tb-title-wrap">
+                        <div>
+                            <h2 id="panelTitle">HR Dashboard</h2>
+                            <p id="panelSub">Human Resources Panel</p>
+                        </div>
+                        <div class="tb-emp-stats" id="empTopStats">
+                            <span class="badge bd-pend">Monthly Leaves: <span id="empMonthLeaves">0</span></span>
+                            <span class="badge bd-info">Yearly Leaves: <span id="empYearLeaves">0</span></span>
+                        </div>
                     </div>
                 </div>
                 <div class="tb-r">
@@ -817,15 +826,14 @@
                                     <option value="Hybrid">Hybrid</option>
                                     <option value="Onsite">Onsite</option>
                                 </select>
-                                <select class="fsel2" id="mgrFil" onchange="filterEmp()"><option value="">All Managers</option></select>
                                 <button class="btn btn-p btn-sm" onclick="openAddEmp()">➕ Add Employee</button>
                             </div>
                         </div>
                         <div id="empAlerts"></div>
                         <div class="tw">
                             <table>
-                                <thead><tr><th>Employee</th><th>Email</th><th>Role</th><th>Department</th><th>Type</th><th>Work Mode</th><th>Contract</th><th>Project</th><th>Rep. Manager</th><th>Manager</th><th>Join Date</th><th>Status</th><th>Actions</th></tr></thead>
-                                <tbody id="empBody"><tr><td colspan="13"><div class="empty"><div class="ei">⏳</div><h3>Loading...</h3></div></td></tr></tbody>
+                                <thead><tr><th>Employee</th><th>Email</th><th>Role</th><th>Department</th><th>Type</th><th>Work Mode</th><th>Contract</th><th>Month Leaves</th><th>Year Leaves</th><th>Rep. Manager</th><th>Manager</th><th>Join Date</th><th>Status</th><th>Actions</th></tr></thead>
+                                <tbody id="empBody"><tr><td colspan="14"><div class="empty"><div class="ei">⏳</div><h3>Loading...</h3></div></td></tr></tbody>
                             </table>
                         </div>
                     </div>
@@ -838,8 +846,14 @@
                             <div class="card-t">✅ Attendance Log</div>
                                 <div class="sb-bar">
                                 <div class="sw"><input type="text" class="sinp" id="attSrch" placeholder="Search..." oninput="filterAtt()"/></div>
-                                <div class="date-btn-wrap" style="min-width:140px;">
-                                    <input type="date" id="attDate" onchange="filterAtt()"/>
+                                <div style="display:flex; align-items:center; gap:8px;">
+                                    <div class="date-btn-wrap" style="min-width:140px; flex:1;">
+                                        <input type="date" id="attDateFrom" onchange="filterAtt()"/>
+                                    </div>
+                                    <span style="color:var(--muted); font-size:0.9rem; white-space:nowrap;">to</span>
+                                    <div class="date-btn-wrap" style="min-width:140px; flex:1;">
+                                        <input type="date" id="attDateTo" onchange="filterAtt()"/>
+                                    </div>
                                 </div>
                                 <select class="fsel2" id="attDeptFil" onchange="filterAtt()">
                                     <option value="">All Departments</option>
@@ -1209,7 +1223,6 @@
                     <select class="fsel3" id="mStatus">
                         <option value="Active" selected>✅ Active</option>
                         <option value="Inactive">🚫 Inactive</option>
-                        <option value="Rejected">❌ Rejected</option>
                     </select>
                 </div>
             </div>
@@ -1289,20 +1302,6 @@
             <!-- PHONE & PROJECT -->
             <div class="frow">
                 <div class="fgrp"><label class="flbl">Phone</label><input type="tel" class="finp" id="mPhone" placeholder="+91-9876543210" inputmode="tel"/></div>
-                <div class="fgrp">
-                    <label class="flbl">🎬 Current Project</label>
-                    <div class="ms-wrap" id="modalProjWrap">
-                        <div class="ms-trigger" id="modalProjTrigger" onclick="toggleMS('modal')" tabindex="0">
-                            <span class="ms-trigger-txt" id="modalProjTriggerTxt">Select Project(s)</span>
-                            <span class="ms-arrow">▼</span>
-                        </div>
-                        <div class="ms-dropdown" id="modalProjDropdown">
-                            <div class="ms-search"><input type="text" placeholder="Search projects..." id="modalProjSearch" oninput="filterMSOptions('modal')" onclick="event.stopPropagation()"/></div>
-                            <div id="modalProjOptions"></div>
-                        </div>
-                        <div class="ms-tags" id="modalProjTags"></div>
-                    </div>
-                </div>
             </div>
 
             <div class="m-ftr">
@@ -1374,7 +1373,7 @@
             clearAll(){this._s={};try{Object.keys(sessionStorage).filter(k=>k.startsWith('atp_hr_')).forEach(k=>sessionStorage.removeItem(k))}catch{}}
         };
 
-        let allEmp=[],allAtt=[],allLv=[],allManagers=[],allHRProfiles=[],projectList=[];
+        let allEmp=[],allEmpDirectory=[],allAtt=[],allLv=[],allManagers=[],allHRProfiles=[],projectList=[];
         let editEmail=null,confCb=null,isLive=false,dataLoaded=false,projEditId=null,mgrProfileEditEmail=null,hrProfileEditUsername=null;
         let leaveMonitorDays=[],leaveMonitorSelectedDate='';
         const msState={modal:new Set()};
@@ -1385,6 +1384,32 @@
         const isValidEmail=e=>/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
         const ini=(n='')=>(n||'U').split(' ').map(x=>x[0]).join('').substring(0,2).toUpperCase()||'?';
         const esc=s=>(s||'').replace(/'/g,"\\'").replace(/"/g,'&quot;');
+        function stripEmployeeForDirectory(emp={}){
+            const employmentType=emp.employmentType||emp.employeeType||emp.employment_type||'Permanent';
+            return {
+                id:emp.id||'',
+                email:emp.email||'',
+                name:emp.name||'',
+                role:emp.role||'',
+                department:emp.department||'',
+                employmentType,
+                employeeType:employmentType,
+                employment_type:employmentType,
+                workMode:emp.workMode||'',
+                status:emp.status||'Active',
+                reportingManager:emp.reportingManager||'',
+                reportingManagerEmail:emp.reportingManagerEmail||'',
+                manager:emp.manager||'',
+                managerEmail:emp.managerEmail||'',
+                phone:emp.phone||'',
+                joinDate:emp.joinDate||'',
+                contractStartDate:emp.contractStartDate||'',
+                contractEndDate:emp.contractEndDate||'',
+                contractTotalDays:emp.contractTotalDays||'',
+                noticePeriod:emp.noticePeriod||'',
+                renewalNotes:emp.renewalNotes||''
+            };
+        }
         const escHtml=s=>(s||'').toString().replace(/[&<>"']/g,m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m]));
 
         // ===== WORK MODE =====
@@ -1454,6 +1479,7 @@
                 case 'ping':return{success:true};
                 case 'setup':return{success:true,message:'Local mode active'};
                 case 'getEmployees':return{success:true,employees:lsGet(LS.EMP)};
+                case 'getEmployeesDirectory':return{success:true,employees:lsGet(LS.EMP).map(stripEmployeeForDirectory)};
                 case 'addEmployee':{const emps=lsGet(LS.EMP);if(emps.find(e=>e.email?.toLowerCase()===(data.email||'').toLowerCase()))return{success:false,message:'Email already exists!'};const emp={...data,id:'EMP'+Date.now(),addedOn:new Date().toISOString()};delete emp.action;emps.push(emp);lsSet(LS.EMP,emps);return{success:true,message:'Employee added!',id:emp.id}}
                 case 'updateEmployee':{const emps=lsGet(LS.EMP);const i=emps.findIndex(e=>e.email?.toLowerCase()===(data.email||'').toLowerCase());if(i<0)return{success:false,message:'Not found'};emps[i]={...emps[i],...data};lsSet(LS.EMP,emps);return{success:true,message:'Updated!'}}
                 case 'deleteEmployee':{lsSet(LS.EMP,lsGet(LS.EMP).filter(e=>e.email?.toLowerCase()!==(data.email||'').toLowerCase()));return{success:true}}
@@ -1497,6 +1523,51 @@
         function fmtDate(val){const d=safeParseDate(val);if(!d)return'N/A';try{return d.toLocaleDateString('en-US',{year:'numeric',month:'short',day:'numeric'})}catch{return String(val)}}
         function extractTime(val){if(!val)return'--';const s=String(val).trim();const iso=s.match(/T(\d{2}):(\d{2})(?::(\d{2}))?/);if(iso){let h=parseInt(iso[1],10),m=iso[2];const ap=h>=12?'PM':'AM';h=h%12||12;return`${h}:${m} ${ap}`}const plain=s.match(/(\d{1,2}):(\d{2})(?::\d{2})?\s*(AM|PM)?/i);if(plain){let h=parseInt(plain[1],10),m=plain[2];let ap=(plain[3]||'').toUpperCase();if(!ap){ap=h>=12?'PM':'AM';h=h%12||12;}return`${h}:${m} ${ap}`}return'--';}
         const todayStr=()=>new Date().toISOString().split('T')[0];
+        function getLeaveStatDate(leave){return safeParseDate(leave?.fromDate)||safeParseDate(leave?.appliedOn)||safeParseDate(leave?.toDate)}
+        function normalizeEmpKey(val){return (val||'').toString().trim().toLowerCase();}
+        function getLeaveDayValue(leave){
+            const raw=Number(leave?.days);
+            if(Number.isFinite(raw)&&raw>0)return raw;
+            const from=safeParseDate(leave?.fromDate),to=safeParseDate(leave?.toDate||leave?.fromDate);
+            if(from&&to){
+                const diff=Math.floor((to.setHours(0,0,0,0)-from.setHours(0,0,0,0))/86400000)+1;
+                if(diff>0)return diff;
+            }
+            return 1;
+        }
+        function getEmployeeMatchKeys(obj){
+            return [
+                `email:${normalizeEmpKey(obj?.email)}`,
+                `id:${normalizeEmpKey(obj?.id||obj?.empId)}`,
+                `name:${normalizeEmpKey(obj?.name)}`
+            ].filter(k=>!k.endsWith(':'));
+        }
+        function buildEmployeeLeaveCountMap(){
+            const now=new Date(),map={};
+            (allLv||[]).forEach(leave=>{
+                const d=getLeaveStatDate(leave);
+                if(!d)return;
+                const keys=getEmployeeMatchKeys(leave);
+                if(!keys.length)return;
+                const days=getLeaveDayValue(leave);
+                if(d.getFullYear()===now.getFullYear()){
+                    keys.forEach(key=>{
+                        if(!map[key])map[key]={month:0,year:0};
+                        map[key].year+=days;
+                        if(d.getMonth()===now.getMonth())map[key].month+=days;
+                    });
+                }
+            });
+            return map;
+        }
+        function updateEmployeeLeaveStats(){
+            const now=new Date();let monthCount=0,yearCount=0;
+            (allLv||[]).forEach(leave=>{const d=getLeaveStatDate(leave);if(!d)return;if(d.getFullYear()===now.getFullYear()){yearCount++;if(d.getMonth()===now.getMonth())monthCount++;}});
+            const monthEl=document.getElementById('empMonthLeaves'),yearEl=document.getElementById('empYearLeaves');
+            if(monthEl)monthEl.textContent=monthCount;
+            if(yearEl)yearEl.textContent=yearCount;
+        }
+        function updateTopbarMeta(name){const wrap=document.getElementById('empTopStats');if(wrap)wrap.style.display=name==='emp'?'flex':'none';}
         const safeDateStr=val=>{const d=safeParseDate(val);return d?d.toISOString().split('T')[0]:String(val||'').trim().substring(0,10);}
         const normalizeMonitorEmail=email=>(email||'').toString().trim().toLowerCase();
         function timeKeyFromValue(val){const shown=extractTime(val);const match=shown.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);if(!match)return shown==='--'?'00:00':shown;let hours=parseInt(match[1],10);const minutes=match[2];const period=match[3].toUpperCase();if(period==='PM'&&hours!==12)hours+=12;if(period==='AM'&&hours===12)hours=0;return`${String(hours).padStart(2,'0')}:${minutes}`;}
@@ -1546,6 +1617,7 @@
             const panelId=(name==='profile-manager'||name==='profile-hr')?'profiles':name;
             const p=document.getElementById('panel-'+panelId);if(p)p.classList.add('on');
             const[t,s]=PANEL_META[name];document.getElementById('panelTitle').textContent=t;document.getElementById('panelSub').textContent=s;
+            updateTopbarMeta(name);
             document.querySelectorAll('.nav-item[data-panel]').forEach(n=>{n.classList.toggle('on',n.dataset.panel===name)});
             closeAllMS();
             if(name==='proj'){renderProjList();populateProjDropdowns()}
@@ -1597,19 +1669,21 @@
 
         async function loadAll(){
             dataLoaded=true;showSkeletons();
-            const[er,ar,lr,pr,mr,hrr]=await Promise.all([callAPI('getEmployees',{},true),callAPI('getAllAttendance',{},true),callAPI('getAllLeaves',{},true),callAPI('getProjects',{},true),callAPI('getManagers',{},true),callAPI('getHRProfiles',{},true)]);
-            if(er.success){allEmp=er.employees||[];renderEmp()}
+            const[er,edr,ar,lr,pr,mr,hrr]=await Promise.all([callAPI('getEmployees',{},true),callAPI('getEmployeesDirectory',{},true),callAPI('getAllAttendance',{},true),callAPI('getAllLeaves',{},true),callAPI('getProjects',{},true),callAPI('getManagers',{},true),callAPI('getHRProfiles',{},true)]);
+            if(er.success){allEmp=er.employees||[]}
+            if(edr.success){allEmpDirectory=edr.employees||[];renderEmp()}
+            else if(er.success){allEmpDirectory=(er.employees||[]).map(stripEmployeeForDirectory);renderEmp()}
             if(ar.success){allAtt=ar.attendance||[];renderAtt()}
             if(lr.success){allLv=lr.leaves||[];renderLeaves()}
             if(pr.success){projectList=pr.projects||[];lsSet(LS.PROJ,projectList)}
             if(mr.success){allManagers=mr.managers||[];lsSet(LS.MGR,allManagers);renderManagerProfiles()}
             if(hrr.success){allHRProfiles=hrr.profiles||[];lsSet(LS.HR,allHRProfiles);renderHRProfiles()}
-            renderProjList();populateProjDropdowns();populateMgrFilter();refreshDash();renderLeaveMonitor();buildReports();buildContractsPanel();updateModeUI();
+            renderProjList();populateProjDropdowns();refreshDash();renderLeaveMonitor();buildReports();buildContractsPanel();updateModeUI();
         }
 
         function showSkeletons(){const sk=(cols)=>`<tr>${Array(cols).fill(0).map(()=>`<td><div class="skeleton" style="height:13px;"></div></td>`).join('')}</tr>`.repeat(4);['empBody','attBody','contractsBody'].forEach((id,i)=>{const el=document.getElementById(id);if(el)el.innerHTML=sk([12,9,9][i])});}
 
-        async function loadEmp(){CACHE.clear('getEmployees');const r=await callAPI('getEmployees',{},true);if(r.success){allEmp=r.employees||[];renderEmp();populateProjDropdowns();populateMgrFilter();renderLeaveMonitor();buildContractsPanel()}}
+        async function loadEmp(){CACHE.clear('getEmployees');CACHE.clear('getEmployeesDirectory');const[r,dr]=await Promise.all([callAPI('getEmployees',{},true),callAPI('getEmployeesDirectory',{},true)]);if(r.success){allEmp=r.employees||[];allEmpDirectory=dr.success?(dr.employees||[]):allEmp.map(stripEmployeeForDirectory);renderEmp();populateProjDropdowns();renderLeaveMonitor();buildContractsPanel()}}
         function refreshAll(){CACHE.clearAll();dataLoaded=false;loadAll();toast('🔄 Refreshed','Data reloaded','info')}
 
         async function runSetup(){toast('⚙️ Setting up...','Creating sheets...','info');const r=await callAPI('setup');if(r.success){toast('✅ Done!',r.message,'ok');CACHE.clearAll();loadAll()}else toast('❌ Failed',r.message,'err');}
@@ -1625,12 +1699,6 @@
                 toast('❌ Email Failed',r.message,'err');
                 alert('❌ Email System Error!\n\n' + r.message + '\n\nDetails: ' + JSON.stringify(r.details, null, 2));
             }
-        }
-
-        function populateMgrFilter(){
-            const mgrs=new Set();allEmp.forEach(e=>{if(e.manager&&e.manager.trim())mgrs.add(e.manager.trim());if(e.reportingManager&&e.reportingManager.trim())mgrs.add(e.reportingManager.trim())});
-            const sel=document.getElementById('mgrFil');if(!sel)return;const cur=sel.value;
-            sel.innerHTML='<option value="">All Managers</option>'+[...mgrs].sort().map(m=>`<option value="${esc(m)}"${m===cur?' selected':''}>${m}</option>`).join('');
         }
 
         // ===== MANAGER EMAIL LOOKUP =====
@@ -1796,27 +1864,27 @@
         function refreshDash(){
             document.getElementById('stTotalEmp').textContent=allEmp.length;const today=todayStr();const todayAtt=allAtt.filter(a=>(a.date||'').toString().substring(0,10)===today);
             document.getElementById('stPresent').textContent=todayAtt.length;document.getElementById('stAbsent').textContent=Math.max(0,allEmp.length-todayAtt.length);document.getElementById('stPending').textContent=allLv.filter(l=>l.status==='Pending').length;
+            updateEmployeeLeaveStats();
             buildContractsPanel();
             document.getElementById('dashAttBody').innerHTML=!todayAtt.length?`<tr><td colspan="6"><div class="empty"><div class="ei">📭</div><h3>No attendance today</h3></div></td></tr>`:todayAtt.map(a=>{const emp=allEmp.find(e=>e.email===a.email);const wm=emp?.workMode||a.workMode||'';return`<tr><td><div style="display:flex;align-items:center;gap:8px;"><div class="av">${ini(a.name||a.email)}</div><strong style="font-size:.84rem;">${a.name||'N/A'}</strong></div></td><td class="email-cell">${a.email}</td><td style="font-size:.81rem;">${a.role||'—'}</td><td><span class="badge bd-info">${a.department||'N/A'}</span></td><td>${getWorkModeBadge(wm)}</td><td class="manager-cell">${emp?.manager||'N/A'}</td><td style="font-size:.81rem;">${fmtDate(a.date)}</td><td style="font-weight:700;color:var(--p);font-size:.84rem;">${extractTime(a.checkIn)}</td><td><span class="badge bd-ok">✅ Present</span></td></tr>`;}).join('');
         }
 
-        function renderEmp(data=allEmp){
-            const tb=document.getElementById('empBody');if(!data.length){tb.innerHTML=`<tr><td colspan="13"><div class="empty"><div class="ei">👥</div><h3>No employees found</h3></div></td></tr>`;return}
-            tb.innerHTML=data.map(e=>{const proj=e.currentProject||e.project||'—',type=e.employmentType||'Permanent',wm=e.workMode||'',status=e.status||'Active';return`<tr><td><div style="display:flex;align-items:center;gap:8px;"><div class="av">${ini(e.name)}</div><div><strong style="font-size:.85rem;">${e.name}</strong><div style="font-size:.7rem;color:var(--muted);">${e.id||''}</div></div></div></td><td class="email-cell">${e.email}</td><td style="font-size:.81rem;">${e.role||'—'}</td><td><span class="badge bd-info">${e.department||'—'}</span></td><td>${getEmpTypeBadge(type)}</td><td>${getWorkModeBadge(wm)}</td><td>${getContractDaysBadge(e)}</td><td><span class="badge bd-proj" title="${proj}">🎬 ${proj.length>18?proj.substring(0,18)+'…':proj}</span></td><td class="manager-cell">${e.reportingManager||'<span style="color:var(--muted);font-style:italic;">Not set</span>'}<br><span style="font-size:.67rem;color:var(--muted);">${e.reportingManagerEmail||''}</span></td><td class="manager-cell">${e.manager||'<span style="color:var(--muted);font-style:italic;">Not set</span>'}<br><span style="font-size:.67rem;color:var(--muted);">${e.managerEmail||''}</span></td><td style="font-size:.79rem;">${fmtDate(e.joinDate)}</td><td><span class="badge ${status==='Active'?'bd-ok':'bd-err'}">${status}</span></td><td><div style="display:flex;gap:4px;"><button class="btn-ico btn-warn" onclick="editEmp('${esc(e.email)}')" title="Edit">✏️</button><button class="btn-ico btn-err" onclick="confDel('${esc(e.email)}','${esc(e.name)}')" title="Delete">🗑️</button></div></td></tr>`;}).join('');
+        function renderEmp(data=allEmpDirectory){
+            const tb=document.getElementById('empBody');if(!data.length){tb.innerHTML=`<tr><td colspan="14"><div class="empty"><div class="ei">👥</div><h3>No employees found</h3></div></td></tr>`;return}
+            const leaveCounts=buildEmployeeLeaveCountMap();
+            tb.innerHTML=data.map(e=>{const type=e.employmentType||'Permanent',wm=e.workMode||'',status=e.status||'Active',keys=getEmployeeMatchKeys(e),lv=keys.map(k=>leaveCounts[k]).find(Boolean)||{month:0,year:0};return`<tr><td><div style="display:flex;align-items:center;gap:8px;"><div class="av">${ini(e.name)}</div><div><strong style="font-size:.85rem;">${e.name}</strong><div style="font-size:.7rem;color:var(--muted);">${e.id||''}</div></div></div></td><td class="email-cell">${e.email}</td><td style="font-size:.81rem;">${e.role||'—'}</td><td><span class="badge bd-info">${e.department||'—'}</span></td><td>${getEmpTypeBadge(type)}</td><td>${getWorkModeBadge(wm)}</td><td>${getContractDaysBadge(e)}</td><td><span class="badge bd-pend">${lv.month}</span></td><td><span class="badge bd-info">${lv.year}</span></td><td class="manager-cell">${e.reportingManager||'<span style="color:var(--muted);font-style:italic;">Not set</span>'}<br><span style="font-size:.67rem;color:var(--muted);">${e.reportingManagerEmail||''}</span></td><td class="manager-cell">${e.manager||'<span style="color:var(--muted);font-style:italic;">Not set</span>'}<br><span style="font-size:.67rem;color:var(--muted);">${e.managerEmail||''}</span></td><td style="font-size:.79rem;">${fmtDate(e.joinDate)}</td><td><span class="badge ${status==='Active'?'bd-ok':'bd-err'}">${status}</span></td><td><div style="display:flex;gap:4px;"><button class="btn-ico btn-warn" onclick="editEmp('${esc(e.email)}')" title="Edit">✏️</button><button class="btn-ico btn-err" onclick="confDel('${esc(e.email)}','${esc(e.name)}')" title="Delete">🗑️</button></div></td></tr>`;}).join('');
         }
 
         function filterEmp(){
             const s=document.getElementById('empSrch').value.toLowerCase(),
                   d=document.getElementById('deptFil').value,
                   t=document.getElementById('typeFil').value,
-                  wm=document.getElementById('workModeFil').value,
-                  m=document.getElementById('mgrFil').value;
-            renderEmp(allEmp.filter(e=>
-                (!s||`${e.name} ${e.email} ${e.role} ${e.currentProject||e.project||''}`.toLowerCase().includes(s))&&
+                  wm=document.getElementById('workModeFil').value;
+            renderEmp(allEmpDirectory.filter(e=>
+                (!s||`${e.name} ${e.email} ${e.role}`.toLowerCase().includes(s))&&
                 (!d||e.department===d)&&
                 (!t||(e.employmentType||'Permanent')===t)&&
-                (!wm||(e.workMode||'')===wm)&&
-                (!m||(e.manager===m||e.reportingManager===m))
+                (!wm||(e.workMode||'')===wm)
             ));
         }
 
@@ -1926,6 +1994,7 @@
 
             if(editEmail){const i=allEmp.findIndex(e=>e.email===editEmail);if(i>-1)allEmp[i]={...allEmp[i],...payload}}
             else{allEmp.push({...payload,id:'EMP'+Date.now()})}
+            allEmpDirectory=allEmp.map(stripEmployeeForDirectory);
             renderEmp();refreshDash();buildContractsPanel();
             toast('💾 Saving...','Please wait','info');
             
@@ -1941,8 +2010,7 @@
                 refreshDash();
                 buildReports();
                 buildContractsPanel();
-                populateMgrFilter();
-            }
+                }
             else{
                 // ✅ Keep modal open and show error so user can fix and retry
                 await loadEmp();
@@ -1951,7 +2019,7 @@
                 modMsg('empModAlert','❌ ' + r.message);
             }        }
 
-        function confDel(email,name){document.getElementById('confT').textContent=`Delete ${name}?`;document.getElementById('confM').textContent=`Remove ${name} from the system? This cannot be undone.`;confCb=async()=>{allEmp=allEmp.filter(e=>e.email!==email);renderEmp();refreshDash();renderLeaveMonitor();CACHE.clear('getEmployees');const r=await callAPI('deleteEmployee',{email});if(r.success)toast('🗑️ Deleted',`${name} removed`,'warn');else{await loadEmp();refreshDash();toast('❌ Error',r.message,'err')}};document.getElementById('confOv').classList.add('on');}
+        function confDel(email,name){document.getElementById('confT').textContent=`Delete ${name}?`;document.getElementById('confM').textContent=`Remove ${name} from the system? This cannot be undone.`;confCb=async()=>{allEmp=allEmp.filter(e=>e.email!==email);allEmpDirectory=allEmp.map(stripEmployeeForDirectory);renderEmp();refreshDash();renderLeaveMonitor();CACHE.clear('getEmployees');CACHE.clear('getEmployeesDirectory');const r=await callAPI('deleteEmployee',{email});if(r.success)toast('🗑️ Deleted',`${name} removed`,'warn');else{await loadEmp();refreshDash();toast('❌ Error',r.message,'err')}};document.getElementById('confOv').classList.add('on');}
 
         function renderAtt(data=allAtt){
             const tb=document.getElementById('attBody');if(!data.length){tb.innerHTML=`<tr><td colspan="9"><div class="empty"><div class="ei">📋</div><h3>No records</h3></div></td></tr>`;return}
@@ -1961,7 +2029,8 @@
             tb.innerHTML=sorted.map(a=>{const emp=allEmp.find(e=>e.email===a.email);const wm=emp?.workMode||a.workMode||'';return`<tr><td><div style="display:flex;align-items:center;gap:8px;"><div class="av">${ini(a.name||a.email)}</div><strong style="font-size:.85rem;">${a.name||'N/A'}</strong></div></td><td class="email-cell">${a.email}</td><td><span class="badge bd-info">${a.department||'N/A'}</span></td><td><span class="badge bd-proj">🎬 ${a.currentProject||'N/A'}</span></td><td>${getWorkModeBadge(wm)}</td><td class="manager-cell">${emp?.manager||'N/A'}</td><td style="font-size:.81rem;">${fmtDate(a.date)}</td><td style="font-weight:700;color:var(--p);font-size:.84rem;">${extractTime(a.checkIn)}</td><td><span class="badge bd-ok">✅ Present</span></td></tr>`;}).join('');
         }
 
-        function filterAtt(){const s=document.getElementById('attSrch').value.toLowerCase(),d=document.getElementById('attDate').value,dept=document.getElementById('attDeptFil').value;renderAtt(allAtt.filter(a=>{const mS=!s||`${a.name} ${a.email} ${a.department} ${a.currentProject||''}`.toLowerCase().includes(s);const mD=!d||(a.date||'').toString().substring(0,10)===d;const mDept=!dept||a.department===dept;return mS&&mD&&mDept;}));}
+        function filterAtt(){const s=document.getElementById('attSrch').value.toLowerCase(),dFrom=document.getElementById('attDateFrom').value,dTo=document.getElementById('attDateTo').value,dept=document.getElementById('attDeptFil').value;renderAtt(allAtt.filter(a=>{const mS=!s||`${a.name} ${a.email} ${a.department} ${a.currentProject||''}`.toLowerCase().includes(s);const aDate=(a.date||'').toString().substring(0,10);const mD=(!dFrom||aDate>=dFrom)&&(!dTo||aDate<=dTo);const mDept=!dept||a.department===dept;return mS&&mD&&mDept;}));}
+
 
         function renderLeaves(data=allLv){
             const s=document.getElementById('lvSrch').value.toLowerCase();
@@ -2083,7 +2152,7 @@ ${lv.rejectionReason?'Rejection Reason: '+lv.rejectionReason:''}`;
         const nowStr=()=>new Date().toISOString().split('T')[0];
         function expAtt(){csvDl(['Name','Email','Dept','Project','Work Mode','Manager','Manager Email','Date','Check-in','Status'],allAtt.map(a=>{const emp=allEmp.find(e=>e.email===a.email);return[a.name||'',a.email||'',a.department||'',a.currentProject||'',emp?.workMode||'',emp?.manager||'',emp?.managerEmail||'',a.date||'',extractTime(a.checkIn)||'','Present']}),`attendance_${nowStr()}.csv`);toast('📥 Exported','Attendance CSV','ok');}
         function expLv(){csvDl(['Name','Email','Dept','Type','From','To','Days','Reason','Work Mode','Rep Manager','Rep Mgr Email','Manager','Mgr Email','Status','Approved By','Rejected By','Rejection Reason','Applied'],allLv.map(l=>{const emp=allEmp.find(e=>e.email===l.email);return[l.name||'',l.email||'',l.department||'',l.leaveType||'',l.fromDate||'',l.toDate||'',l.days||'',l.reason||'',emp?.workMode||'',emp?.reportingManager||'',emp?.reportingManagerEmail||'',emp?.manager||'',emp?.managerEmail||'',l.status||'',l.approvedBy||'',l.rejectedBy||'',l.rejectionReason||'',l.appliedOn||'']}),`leaves_${nowStr()}.csv`);toast('📥 Exported','Leaves CSV','ok');}
-        function expEmp(){csvDl(['ID','Name','Email','Role','Dept','Type','Work Mode','Project','Rep Manager','Rep Mgr Email','Manager','Mgr Email','Phone','Join'],allEmp.map(e=>[e.id||'',e.name||'',e.email||'',e.role||'',e.department||'',e.employmentType||'Permanent',e.workMode||'',e.currentProject||e.project||'',e.reportingManager||'',e.reportingManagerEmail||'',e.manager||'',e.managerEmail||'',e.phone||'',e.joinDate||'']),`employees_${nowStr()}.csv`);toast('📥 Exported','Employees CSV','ok');}
+        function expEmp(){csvDl(['ID','Name','Email','Role','Dept','Type','Work Mode','Rep Manager','Rep Mgr Email','Manager','Mgr Email','Phone','Join'],allEmpDirectory.map(e=>[e.id||'',e.name||'',e.email||'',e.role||'',e.department||'',e.employmentType||'Permanent',e.workMode||'',e.reportingManager||'',e.reportingManagerEmail||'',e.manager||'',e.managerEmail||'',e.phone||'',e.joinDate||'']),`employees_${nowStr()}.csv`);toast('📥 Exported','Employees CSV','ok');}
         function expContracts(){csvDl(['Name','Email','Dept','Type','Work Mode','Start','End','Total Days','Days Left','Status'],allEmp.map(e=>{const cs=getContractStatus(e);const t=e.contractTotalDays||(e.contractStartDate&&e.contractEndDate?calcTotalDays(e.contractStartDate,e.contractEndDate):null);return[e.name||'',e.email||'',e.department||'',e.employmentType||'Permanent',e.workMode||'',e.contractStartDate||'',e.contractEndDate||'',t||'',cs.days!==undefined?cs.days:'N/A',cs.status]}),`contracts_${nowStr()}.csv`);toast('📥 Exported','Contracts CSV','ok');}
 
         function closeConf(){document.getElementById('confOv').classList.remove('on');confCb=null}

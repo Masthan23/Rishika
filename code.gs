@@ -93,6 +93,7 @@ function handleAction(action, data) {
     case 'deleteHRProfile':   return deleteHRProfile(data.username);
     case 'getEmployee':       return getEmployee(data.email);
     case 'getEmployees':      return getEmployees();
+    case 'getEmployeesDirectory': return getEmployeesDirectory();
     case 'addEmployee':       return addEmployee(data);
     case 'updateEmployee':    return updateEmployee(data);
     case 'deleteEmployee':    return deleteEmployee(data.email);
@@ -794,6 +795,44 @@ function getEmployees() {
   }
 
   return { success: true, employees: employees };
+}
+
+function getEmployeesDirectory() {
+  const res = getEmployees();
+  if (!res.success) return res;
+
+  return {
+    success: true,
+    employees: res.employees.map(function(emp) {
+      return buildEmployeeDirectoryObject(emp);
+    })
+  };
+}
+
+function buildEmployeeDirectoryObject(emp) {
+  return {
+    id: emp.id || '',
+    email: emp.email || '',
+    name: emp.name || '',
+    role: emp.role || '',
+    department: emp.department || '',
+    employmentType: emp.employmentType || emp.employeeType || emp.employment_type || 'Permanent',
+    employeeType: emp.employmentType || emp.employeeType || emp.employment_type || 'Permanent',
+    employment_type: emp.employmentType || emp.employeeType || emp.employment_type || 'Permanent',
+    workMode: emp.workMode || '',
+    status: emp.status || 'Active',
+    reportingManager: emp.reportingManager || '',
+    reportingManagerEmail: emp.reportingManagerEmail || '',
+    manager: emp.manager || '',
+    managerEmail: emp.managerEmail || '',
+    phone: emp.phone || '',
+    joinDate: emp.joinDate || '',
+    contractStartDate: emp.contractStartDate || '',
+    contractEndDate: emp.contractEndDate || '',
+    contractTotalDays: emp.contractTotalDays || '',
+    noticePeriod: emp.noticePeriod || '',
+    renewalNotes: emp.renewalNotes || ''
+  };
 }
 
 function addEmployee(data) {
