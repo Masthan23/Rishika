@@ -1,66 +1,545 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <meta name="theme-color" content="#a21caf">
-    <title>AttendPro × Dashverse</title>
+    <meta name="theme-color" content="#020008">
+    <title>Dashverse</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="dashverse-ui.css">
     <style>
-        html, body { height:100%; margin:0; }
-        body { display:flex; align-items:center; justify-content:center; background: radial-gradient(ellipse 100% 70% at 50% -20%, rgba(192,38,211,.25) 0%, transparent 55%), linear-gradient(165deg, #030014 0%, #12081f 55%, #030014 100%); color:#fff; font-family:system-ui, sans-serif; overflow:hidden; }
-        .boot-splash { display:flex; flex-direction:column; gap:24px; align-items:center; justify-content:center; text-align:center; padding:24px; }
-        .boot-splash__brand { font-size:2.3rem; font-weight:900; letter-spacing:-.03em; text-shadow:0 12px 40px rgba(232,121,249,.35); }
-        .boot-splash__brand span { background:linear-gradient(135deg,#f0abfc,#22d3ee,#fde68a); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
-        .boot-splash__tag { font-size:.85rem; letter-spacing:.24em; text-transform:uppercase; opacity:.8; }
-        .ap-loader { position:relative; width:min(240px,52vw); height:min(240px,52vw); max-width:260px; max-height:260px; display:grid; place-items:center; perspective:1200px; }
-        .ap-loader__spin { position:absolute; inset:0; display:grid; place-items:center; transform-style:preserve-3d; animation:ap-orbit 14s linear infinite; }
-        .ap-loader__ring { position:absolute; inset:0; border-radius:50%; border:3px solid transparent; border-top-color:rgba(232,121,249,.88); border-right-color:rgba(124,58,237,.4); box-shadow:0 0 32px rgba(232,121,249,.3); }
-        .ap-loader__ring:nth-child(2) { inset:12%; transform:rotateY(56deg); border-top-color:rgba(124,58,237,.75); }
-        .ap-loader__ring:nth-child(3) { inset:24%; transform:rotateX(52deg); border-top-color:rgba(34,211,238,.55); }
-        .dv-gem-wrap { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; transform-style:preserve-3d; }
-        .dv-gem-bloom { position:absolute; inset:-30%; border-radius:40%; background:radial-gradient(circle, rgba(232,121,249,.35) 0%, transparent 70%); filter:blur(20px); animation:dvBloom 2.8s ease-in-out infinite alternate; }
-        .dv-gem-img { width:48%; aspect-ratio:1; border-radius:28px; background:rgba(255,255,255,.18); box-shadow:0 0 0 1px rgba(255,255,255,.18), 0 24px 52px rgba(0,0,0,.28); overflow:hidden; display:flex; align-items:center; justify-content:center; }
-        .dv-gem-img img { width:100%; height:100%; object-fit:cover; display:block; }
-        @keyframes ap-orbit { from { transform:rotateX(58deg) rotateZ(0deg); } to { transform:rotateX(58deg) rotateZ(360deg); } }
-        @keyframes dvBloom { from { opacity:.55; transform:scale(.92); } to { opacity:1; transform:scale(1.08); } }
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        html, body {
+            height: 100%;
+            overflow: hidden;
+            background: #020008;
+            color: #faf5ff;
+        }
+
+        .cinema {
+            position: fixed;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        #particleCanvas {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            pointer-events: none;
+        }
+
+        .aurora {
+            position: absolute;
+            inset: -20%;
+            z-index: 1;
+            pointer-events: none;
+            background:
+                radial-gradient(ellipse 80% 50% at 20% 60%, rgba(120, 40, 255, 0.35) 0%, transparent 60%),
+                radial-gradient(ellipse 70% 45% at 80% 30%, rgba(0, 210, 255, 0.28) 0%, transparent 55%),
+                radial-gradient(ellipse 60% 40% at 50% 80%, rgba(255, 60, 180, 0.22) 0%, transparent 50%);
+            filter: blur(40px);
+            opacity: 0;
+            will-change: opacity, transform;
+            animation:
+                auroraFadeIn 2s ease forwards,
+                auroraDrift 8s 1s ease-in-out infinite alternate;
+        }
+
+        @keyframes auroraFadeIn {
+            from { opacity: 0; }
+            to   { opacity: 1; }
+        }
+
+        @keyframes auroraDrift {
+            from { transform: translate3d(0, 0, 0) scale(1); }
+            to   { transform: translate3d(3%, -2%, 0) scale(1.06); }
+        }
+
+        .rays {
+            position: absolute;
+            inset: 0;
+            z-index: 2;
+            pointer-events: none;
+            opacity: 0;
+            background: conic-gradient(
+                from 220deg at 50% 55%,
+                transparent 0deg,
+                rgba(255,255,255,0.03) 30deg,
+                transparent 60deg,
+                rgba(200,120,255,0.04) 120deg,
+                transparent 150deg,
+                rgba(0,220,255,0.03) 240deg,
+                transparent 270deg
+            );
+            will-change: opacity, transform;
+            animation:
+                raysFade 1.8s 0.3s ease forwards,
+                raysSpin 20s 0.3s linear infinite;
+        }
+
+        @keyframes raysSpin {
+            to { transform: rotate(360deg); }
+        }
+
+        @keyframes raysFade {
+            to { opacity: 1; }
+        }
+
+        .vignette {
+            position: absolute;
+            inset: 0;
+            z-index: 10;
+            pointer-events: none;
+            background: radial-gradient(ellipse 70% 65% at 50% 50%, transparent 40%, rgba(0,0,0,0.75) 100%);
+        }
+
+        .grain {
+            position: absolute;
+            inset: 0;
+            z-index: 11;
+            pointer-events: none;
+            opacity: 0;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E");
+            background-size: 180px 180px;
+            mix-blend-mode: overlay;
+            animation: grainFade 1.5s 0.5s ease forwards;
+        }
+
+        .grain::after {
+            content: '';
+            position: absolute;
+            inset: -50%;
+            background: inherit;
+            background-size: inherit;
+            animation: grainMove 0.15s steps(2) infinite;
+        }
+
+        @keyframes grainFade { to { opacity: 0.055; } }
+        @keyframes grainMove {
+            to { transform: translate3d(-3%, -2%, 0); }
+        }
+
+        .letterbox-top,
+        .letterbox-bottom {
+            position: absolute;
+            left: 0;
+            right: 0;
+            height: 0;
+            background: #000;
+            z-index: 12;
+            will-change: height;
+            animation: letterboxOpen 1.4s 0.2s cubic-bezier(0.76, 0, 0.24, 1) forwards;
+        }
+        .letterbox-top    { top: 0; }
+        .letterbox-bottom { bottom: 0; }
+
+        @keyframes letterboxOpen {
+            to { height: clamp(28px, 5.5vh, 52px); }
+        }
+
+        .splash {
+            position: relative;
+            z-index: 5;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: clamp(20px, 4vh, 36px);
+            text-align: center;
+            padding: 20px;
+        }
+
+        /* Brand block — no 3D/perspective (avoids text raster glitches) */
+        .brand-wrap {
+            position: relative;
+            display: inline-block;
+            opacity: 0;
+            transform: translate3d(0, 24px, 0) scale(0.88);
+            will-change: transform, opacity;
+            animation: brandEnter 1.4s 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+
+        @keyframes brandEnter {
+            to {
+                opacity: 1;
+                transform: translate3d(0, 0, 0) scale(1);
+            }
+        }
+
+        .brand-glow {
+            position: absolute;
+            inset: -35% -15%;
+            z-index: 0;
+            background: radial-gradient(ellipse at 50% 60%, rgba(192,132,252,0.4) 0%, transparent 65%);
+            filter: blur(28px);
+            opacity: 0;
+            pointer-events: none;
+            animation: glowPulse 2.8s 0.9s ease-in-out infinite alternate;
+        }
+
+        @keyframes glowPulse {
+            from { opacity: 0.3; transform: scale3d(0.96, 0.96, 1); }
+            to   { opacity: 0.85; transform: scale3d(1.06, 1.06, 1); }
+        }
+
+        .brand {
+            position: relative;
+            z-index: 1;
+            font-family: 'Syne', system-ui, sans-serif;
+            font-size: clamp(2.8rem, 11vw, 6.8rem);
+            font-weight: 800;
+            line-height: 0.92;
+            letter-spacing: -0.02em;
+            white-space: nowrap;
+            -webkit-font-smoothing: antialiased;
+            text-rendering: optimizeLegibility;
+            backface-visibility: hidden;
+            transform: translateZ(0);
+            background: linear-gradient(
+                125deg,
+                #ffffff 0%,
+                #e8d5ff 18%,
+                #c084fc 38%,
+                #67e8f9 62%,
+                #ffffff 78%,
+                #f0abfc 100%
+            );
+            background-size: 200% 200%;
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            color: transparent;
+            animation: chromeShift 5s ease-in-out infinite;
+        }
+
+        @keyframes chromeShift {
+            0%, 100% { background-position: 0% 50%; }
+            50%       { background-position: 100% 50%; }
+        }
+
+        /* Shine overlay — separate layer, synced via data-text (no hardcoded duplicate) */
+        .brand-shine {
+            position: absolute;
+            inset: 0;
+            z-index: 2;
+            pointer-events: none;
+            font-family: 'Syne', system-ui, sans-serif;
+            font-size: clamp(2.8rem, 11vw, 6.8rem);
+            font-weight: 800;
+            line-height: 0.92;
+            letter-spacing: -0.02em;
+            white-space: nowrap;
+            -webkit-font-smoothing: antialiased;
+            backface-visibility: hidden;
+            background: linear-gradient(
+                105deg,
+                transparent 35%,
+                rgba(255,255,255,0.9) 50%,
+                transparent 65%
+            );
+            background-size: 220% 100%;
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            color: transparent;
+            opacity: 0;
+            animation: lightSweep 1.8s 1.2s ease-in-out forwards;
+        }
+
+        @keyframes lightSweep {
+            0%   { background-position: 180% 0; opacity: 0; }
+            15%  { opacity: 1; }
+            100% { background-position: -80% 0; opacity: 0; }
+        }
+
+        .tagline {
+            font-family: system-ui, sans-serif;
+            font-size: clamp(0.65rem, 2.2vw, 0.8rem);
+            font-weight: 500;
+            letter-spacing: 0.38em;
+            text-transform: uppercase;
+            color: rgba(255,255,255,0.45);
+            opacity: 0;
+            transform: translate3d(0, 10px, 0);
+            animation: taglineIn 0.9s 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+
+        @keyframes taglineIn {
+            to { opacity: 1; transform: translate3d(0, 0, 0); }
+        }
+
+        .progress-area {
+            position: absolute;
+            bottom: clamp(52px, 11vh, 88px);
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 6;
+            width: min(72vw, 420px);
+        }
+
+        .progress-glow {
+            position: absolute;
+            inset: auto 0 -18px 0;
+            height: 40px;
+            background: radial-gradient(ellipse, rgba(168,85,247,0.25) 0%, transparent 70%);
+            filter: blur(16px);
+            opacity: 0;
+            animation: fadeIn 0.5s 0.9s ease forwards;
+        }
+
+        @keyframes fadeIn { to { opacity: 1; } }
+
+        .progress-wrap {
+            position: relative;
+            width: 100%;
+            height: 1px;
+            background: rgba(255,255,255,0.08);
+            border-radius: 99px;
+            overflow: hidden;
+            opacity: 0;
+            animation: fadeIn 0.5s 0.9s ease forwards;
+        }
+
+        .progress-bar {
+            display: block;
+            height: 100%;
+            width: 0%;
+            border-radius: 99px;
+            background: linear-gradient(90deg, #a855f7, #22d3ee, #e879f9);
+            box-shadow: 0 0 14px rgba(168,85,247,0.6);
+            animation: progressFill 2.3s 0.9s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+        }
+
+        @keyframes progressFill {
+            to { width: 100%; }
+        }
+
+        .flare {
+            position: absolute;
+            width: 5px;
+            height: 5px;
+            border-radius: 50%;
+            background: #fff;
+            box-shadow: 0 0 6px 2px rgba(255,255,255,0.8), 0 0 28px 6px rgba(200,150,255,0.4);
+            top: 40%;
+            left: 58%;
+            z-index: 6;
+            opacity: 0;
+            pointer-events: none;
+            animation: flareIn 0.8s 1.5s ease forwards;
+        }
+
+        @keyframes flareIn {
+            to { opacity: 0.65; }
+        }
+
+        .chromatic {
+            position: absolute;
+            inset: 0;
+            z-index: 13;
+            pointer-events: none;
+            opacity: 0;
+        }
+
+        /* ── Exit: pause loops, then fade ── */
+        .cinema.exiting .aurora,
+        .cinema.exiting .rays,
+        .cinema.exiting .brand,
+        .cinema.exiting .brand-glow,
+        .cinema.exiting .flare {
+            animation-play-state: paused;
+        }
+
+        .cinema.exiting .brand-wrap {
+            animation: brandExit 0.7s cubic-bezier(0.55, 0, 1, 0.45) forwards;
+        }
+
+        @keyframes brandExit {
+            to {
+                opacity: 0;
+                transform: translate3d(0, -8px, 0) scale(1.06);
+            }
+        }
+
+        .cinema.exiting .aurora {
+            animation: auroraExit 0.7s ease forwards;
+        }
+
+        .cinema.exiting .rays {
+            animation: fadeOut 0.7s ease forwards;
+        }
+
+        @keyframes auroraExit {
+            to { opacity: 0; }
+        }
+
+        @keyframes fadeOut {
+            to { opacity: 0; }
+        }
+
+        .cinema.exiting .tagline,
+        .cinema.exiting .progress-area {
+            animation: fadeOut 0.5s ease forwards;
+        }
+
+        .cinema.exiting .letterbox-top,
+        .cinema.exiting .letterbox-bottom {
+            animation: letterboxClose 0.65s cubic-bezier(0.76, 0, 0.24, 1) forwards;
+        }
+
+        @keyframes letterboxClose {
+            to { height: 50vh; }
+        }
+
+        .cinema.exiting .chromatic {
+            animation: chromaticFlash 0.45s ease forwards;
+        }
+
+        @keyframes chromaticFlash {
+            0%   { opacity: 0; }
+            35%  { opacity: 0.5; background: radial-gradient(circle at 50% 50%, rgba(255,0,80,0.12), rgba(0,255,200,0.08), transparent 70%); }
+            100% { opacity: 0; }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                animation-duration: 0.01ms !important;
+                animation-delay: 0ms !important;
+                animation-iteration-count: 1 !important;
+            }
+            #particleCanvas { display: none; }
+        }
     </style>
+    <script>
+        (function initParticles() {
+            var canvas = document.getElementById('particleCanvas');
+            if (!canvas) return;
+            var ctx = canvas.getContext('2d');
+            var particles = [];
+            var W, H, dpr, rafId, resizeTimer;
+            var reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+            function resize() {
+                dpr = Math.min(window.devicePixelRatio || 1, 2);
+                W = canvas.width  = Math.floor(window.innerWidth  * dpr);
+                H = canvas.height = Math.floor(window.innerHeight * dpr);
+                canvas.style.width  = window.innerWidth  + 'px';
+                canvas.style.height = window.innerHeight + 'px';
+            }
+
+            function spawn() {
+                var count = Math.min(140, Math.floor(window.innerWidth * window.innerHeight / 5000));
+                particles = [];
+                for (var i = 0; i < count; i++) {
+                    var depth = Math.random();
+                    particles.push({
+                        x: Math.random() * W,
+                        y: Math.random() * H,
+                        r: (0.4 + depth * 2) * dpr,
+                        depth: depth,
+                        alpha: 0.15 + depth * 0.65,
+                        vx: (Math.random() - 0.5) * 0.12 * dpr,
+                        vy: (-0.06 - depth * 0.3) * dpr,
+                        hue: depth > 0.7 ? 280 + Math.random() * 50 : 195 + Math.random() * 35
+                    });
+                }
+            }
+
+            function draw(ts) {
+                ctx.clearRect(0, 0, W, H);
+                var grd = ctx.createRadialGradient(W * 0.5, H * 0.45, 0, W * 0.5, H * 0.45, W * 0.4);
+                grd.addColorStop(0, 'rgba(100, 40, 180, 0.05)');
+                grd.addColorStop(1, 'transparent');
+                ctx.fillStyle = grd;
+                ctx.fillRect(0, 0, W, H);
+
+                var t = ts * 0.001;
+                for (var i = 0; i < particles.length; i++) {
+                    var p = particles[i];
+                    p.x += p.vx;
+                    p.y += p.vy;
+                    if (p.y < -8)  { p.y = H + 8;  p.x = Math.random() * W; }
+                    if (p.x < -8)  p.x = W + 8;
+                    if (p.x > W + 8) p.x = -8;
+
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+                    ctx.fillStyle = 'hsla(' + p.hue + ', 75%, 78%, ' + p.alpha + ')';
+                    ctx.fill();
+                }
+                rafId = requestAnimationFrame(draw);
+            }
+
+            function onResize() {
+                clearTimeout(resizeTimer);
+                resizeTimer = setTimeout(function() {
+                    resize();
+                    spawn();
+                }, 150);
+            }
+
+            resize();
+            spawn();
+            window.addEventListener('resize', onResize);
+            if (!reduced) rafId = requestAnimationFrame(draw);
+
+            window.addEventListener('beforeunload', function() {
+                if (rafId) cancelAnimationFrame(rafId);
+            });
+        })();
+
+        window.addEventListener('load', function() {
+            var DURATION = 4000;
+            var EXIT_AT  = 2400;
+
+            setTimeout(function() {
+                var scene = document.querySelector('.cinema');
+                if (scene) scene.classList.add('exiting');
+            }, EXIT_AT);
+
+            setTimeout(function() {
+                window.location.replace('app.html');
+            }, DURATION);
+        });
+    </script>
 </head>
 <body>
-    <div class="boot-splash" role="status" aria-live="polite">
-        <div class="ap-loader" aria-hidden="true">
-            <div class="ap-loader__spin">
-                <div class="ap-loader__ring"></div>
-                <div class="ap-loader__ring"></div>
-                <div class="ap-loader__ring"></div>
-                <div class="dv-gem-wrap">
-                    <div class="dv-gem-bloom"></div>
-                    <div class="dv-gem-img">
-                        <img src="1.jpg" alt="AttendPro" decoding="async" onerror="this.style.display='none'" />
-                    </div>
-                </div>
+    <div class="cinema" aria-label="Dashverse loading">
+        <canvas id="particleCanvas" aria-hidden="true"></canvas>
+        <div class="aurora" aria-hidden="true"></div>
+        <div class="rays" aria-hidden="true"></div>
+
+        <main class="splash">
+            <div class="brand-wrap">
+                <div class="brand-glow" aria-hidden="true"></div>
+                <h1 class="brand">Dashverse</h1>
+                <span class="brand-shine" aria-hidden="true">Dashverse</span>
+            </div>
+            <p class="tagline">Smart Attendance</p>
+        </main>
+
+        <div class="flare" aria-hidden="true"></div>
+
+        <div class="progress-area" aria-hidden="true">
+            <div class="progress-glow"></div>
+            <div class="progress-wrap">
+                <span class="progress-bar"></span>
             </div>
         </div>
-        <div class="boot-splash__brand">Attend<span>Pro</span></div>
-        <div class="boot-splash__tag">Dashverse · Loading</div>
+
+        <div class="vignette" aria-hidden="true"></div>
+        <div class="grain" aria-hidden="true"></div>
+        <div class="chromatic" aria-hidden="true"></div>
+        <div class="letterbox-top" aria-hidden="true"></div>
+        <div class="letterbox-bottom" aria-hidden="true"></div>
     </div>
-    <script>
-        (function(){
-            var params = new URLSearchParams(window.location.search);
-            var skipSplash = params.get('skipSplash') === '1';
-            var redirectDelay = 1700;
-            var target = 'app.html';
-            function go(){ window.location.href = target; }
-            if (skipSplash) {
-                var splash = document.querySelector('.boot-splash');
-                if (splash) {
-                    splash.style.display = 'none';
-                }
-                go();
-                return;
-            }
-            window.addEventListener('load', function(){ setTimeout(go, redirectDelay); });
-            setTimeout(function(){ if(document.readyState !== 'complete') go(); }, redirectDelay + 5000);
-        })();
-    </script>
 </body>
 </html>

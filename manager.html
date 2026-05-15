@@ -9,6 +9,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="dashverse-ui.css">
     <style>
         :root {
             --p: #14b8a6; --p2: #059669; --ac: #5eead4;
@@ -345,8 +346,43 @@
         @keyframes tin { from{opacity:0;transform:translateX(100%)} to{opacity:1;transform:translateX(0)} }
         @keyframes tprog { from{width:100%} to{width:0} }
 
-        .spin { width:16px; height:16px; border:3px solid rgba(255,255,255,.28); border-top-color:#fff; border-radius:50%; animation:sp .7s linear infinite; flex-shrink:0; display:inline-block }
-        @keyframes sp { from{transform:rotate(0)} to{transform:rotate(360deg)} }
+        .spin { width:22px; height:10px; border:none; border-radius:6px; flex-shrink:0; display:inline-block; vertical-align:middle; background:linear-gradient(90deg,rgba(255,255,255,.14) 0%,rgba(255,255,255,.95) 45%,rgba(255,255,255,.14) 100%); background-size:200% 100%; animation:sp .95s ease-in-out infinite }
+        @keyframes sp { 0%{background-position:100% 50%; opacity:.78} 100%{background-position:-100% 50%; opacity:1} }
+
+        /* LOADING OVERLAY — cinematic */
+        .loading-overlay { position:fixed; inset:0; background:rgba(15,31,26,.96); backdrop-filter:blur(26px) saturate(1.15); display:none; align-items:center; justify-content:center; z-index:999; padding:20px }
+        .loading-overlay.on { display:flex }
+        .loading-card { position:relative; overflow:hidden; isolation:isolate; background:linear-gradient(155deg,rgba(52,211,153,.14) 0%,rgba(52,211,153,.06) 34%,rgba(0,0,0,.08) 100%),var(--card); border:1px solid rgba(52,211,153,.22); border-radius:28px; padding:54px 40px 48px; text-align:center; box-shadow:0 40px 110px rgba(0,0,0,.45),0 0 0 1px rgba(255,255,255,.04) inset; max-width:420px; width:100% }
+        .loading-card::after { content:''; position:absolute; inset:-45% -35%; background:linear-gradient(108deg,transparent 38%,rgba(255,255,255,.1) 50%,transparent 62%); transform:translateX(-70%) rotate(11deg); animation:loading-sheen 4.2s ease-in-out infinite; pointer-events:none; mix-blend-mode:overlay; opacity:.75 }
+        [data-theme="light"] .loading-card::after { opacity:.45; background:linear-gradient(108deg,transparent 38%,rgba(255,255,255,.65) 50%,transparent 62%) }
+        @keyframes loading-sheen { 0%,12%{transform:translateX(-82%) rotate(11deg); opacity:0} 28%{opacity:1} 52%{transform:translateX(88%) rotate(11deg); opacity:.72} 68%,100%{opacity:0; transform:translateX(100%) rotate(11deg)} }
+        .loading-cine { position:relative; width:92px; height:92px; margin:0 auto 26px; transform:translateZ(0) }
+        .loading-cine__halo { position:absolute; inset:4px; border-radius:50%; background:radial-gradient(circle at 50% 42%,rgba(52,211,153,.22) 0%,rgba(5,150,105,.12) 48%,transparent 70%); animation:loading-breathe 3.4s ease-in-out infinite; filter:blur(.3px) }
+        .loading-cine__ringfx { position:absolute; inset:0; border-radius:50%; opacity:.56; background:conic-gradient(from 0deg,transparent 0deg 106deg,rgba(52,211,153,.5) 196deg,rgba(94,234,212,.38) 226deg,rgba(250,250,250,.28) 244deg,transparent 276deg 360deg); animation:loading-chase 2.85s linear infinite; -webkit-mask:radial-gradient(farthest-side,transparent calc(100% - 3px),#000 calc(100% - 2.5px)); mask:radial-gradient(farthest-side,transparent calc(100% - 3px),#000 calc(100% - 2.5px)) }
+        .loading-cine__spin { position:absolute; inset:0; animation:loading-orbit 5.1s cubic-bezier(.4,0,.2,1) infinite }
+        .loading-cine__sat { position:absolute; left:50%; top:50%; width:10px; height:10px; margin:-5px 0 0 -5px; border-radius:50%; background:radial-gradient(circle at 32% 28%,#fff,rgba(220,255,245,.95) 38%,var(--mg) 100%); box-shadow:0 0 16px rgba(52,211,153,.52),0 0 30px rgba(5,150,105,.2) }
+        .loading-cine__spin .loading-cine__sat:nth-child(1) { transform:rotate(0deg) translateY(-38px); animation:loading-twinkle 2s ease-in-out infinite }
+        .loading-cine__spin .loading-cine__sat:nth-child(2) { transform:rotate(120deg) translateY(-38px); animation:loading-twinkle 2s ease-in-out .33s infinite }
+        .loading-cine__spin .loading-cine__sat:nth-child(3) { transform:rotate(240deg) translateY(-38px); animation:loading-twinkle 2s ease-in-out .66s infinite }
+        .loading-cine__core { position:absolute; left:50%; top:50%; width:22px; height:22px; margin:-11px 0 0 -11px; border-radius:50%; background:radial-gradient(circle at 40% 35%,rgba(255,255,255,.2),rgba(52,211,153,.12) 54%,rgba(5,150,105,.08) 70%,transparent 76%); box-shadow:0 0 26px rgba(52,211,153,.18) inset,0 0 20px rgba(5,150,105,.12); animation:loading-core 2.75s ease-in-out infinite }
+        @keyframes loading-chase { to { transform:rotate(360deg) } }
+        @keyframes loading-orbit { to { transform:rotate(-360deg) } }
+        @keyframes loading-breathe { 0%,100%{opacity:.7; transform:scale(.96)} 50%{opacity:1; transform:scale(1.04)} }
+        @keyframes loading-core { 0%,100%{transform:scale(.92); opacity:.62} 50%{transform:scale(1.06); opacity:1} }
+        @keyframes loading-twinkle { 0%,100%{box-shadow:0 0 12px rgba(52,211,153,.4),0 0 22px rgba(5,150,105,.12)} 50%{box-shadow:0 0 22px rgba(52,211,153,.82),0 0 36px rgba(94,234,212,.22)} }
+        .loading-rail { height:3px; border-radius:6px; margin:18px auto 0; max-width:220px; background:rgba(255,255,255,.06); overflow:hidden; position:relative; z-index:1 }
+        [data-theme="light"] .loading-rail { background:rgba(16,185,129,.1) }
+        .loading-rail span { display:block; height:100%; width:42%; border-radius:6px; background:linear-gradient(90deg,transparent,rgba(236,253,245,.55) 30%,var(--mg) 52%,var(--ac) 76%,transparent); animation:loading-rail 1.82s cubic-bezier(.45,0,.35,1) infinite; transform:translateX(-140%) }
+        @keyframes loading-rail { 0%{transform:translateX(-140%); opacity:.42} 42%{opacity:1} 100%{transform:translateX(340%); opacity:.42} }
+        .loading-title { position:relative; z-index:1; font-size:1.3rem; font-weight:800; color:var(--txt); margin-bottom:8px; letter-spacing:-0.5px }
+        .loading-subtitle { position:relative; z-index:1; font-size:.88rem; color:rgba(248,248,255,.65); line-height:1.6; margin:0 }
+        [data-theme="light"] .loading-subtitle { color:var(--muted) }
+        @media (prefers-reduced-motion: reduce) {
+            .loading-cine__spin, .loading-cine__ringfx { animation-duration:14s !important; animation-timing-function:linear !important }
+            .loading-card::after { animation:none !important; opacity:0 !important }
+            .loading-rail span { animation-duration:3.2s !important }
+            .spin { animation-duration:1.45s !important }
+        }
 
         .empty { text-align:center; padding:36px 16px; color:var(--muted) }
         .empty .ei { font-size:3rem; margin-bottom:10px }
@@ -435,67 +471,12 @@
         }
         @media(max-width:360px) { .att-status-grid { grid-template-columns:1fr } }
 
-        /* Boot splash — emerald 3D */
-        .boot-splash {
-            position:fixed; inset:0; z-index:100000;
-            display:flex; flex-direction:column; align-items:center; justify-content:center; gap:28px;
-            background:radial-gradient(ellipse 130% 100% at 50% -25%,#064e3b 0%,#022c22 40%,#020617 100%);
-            -webkit-font-smoothing:antialiased;
-            transition:opacity .95s cubic-bezier(.22,1,.36,1),transform .95s cubic-bezier(.22,1,.36,1),filter .6s ease;
-            will-change:opacity,transform;
-        }
-        .boot-splash::before {
-            content:''; position:absolute; inset:0; pointer-events:none;
-            background:radial-gradient(circle at 22% 78%,rgba(16,185,129,.14) 0%,transparent 46%),
-                radial-gradient(circle at 78% 18%,rgba(45,212,191,.1) 0%,transparent 42%),
-                radial-gradient(circle at 50% 100%,rgba(20,184,166,.09) 0%,transparent 52%);
-        }
-        .boot-splash--hide { opacity:0; transform:scale(1.04); filter:blur(12px); pointer-events:none; }
-        .boot-splash__brand { position:relative; font-size:clamp(1.75rem,5vw,2.35rem); font-weight:900; letter-spacing:-.04em; color:#ecfdf5; text-shadow:0 4px 32px rgba(16,185,129,.4); }
-        .boot-splash__brand span { background:linear-gradient(135deg,#5eead4,#34d399,#2dd4bf); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
-        .boot-splash__tag { position:relative; font-size:.72rem; font-weight:600; letter-spacing:.2em; text-transform:uppercase; color:rgba(236,253,245,.48); }
-        .ap-loader { width:min(200px,48vw); height:min(200px,48vw); max-width:220px; max-height:220px; position:relative; perspective:1100px; perspective-origin:50% 45%; }
-        .ap-loader__spin { position:absolute; inset:0; transform-style:preserve-3d; animation:ap-orbit-mgr 10s linear infinite; will-change:transform; }
-        @keyframes ap-orbit-mgr { from { transform:rotateX(62deg) rotateZ(0deg); } to { transform:rotateX(62deg) rotateZ(360deg); } }
-        .ap-loader__ring {
-            position:absolute; inset:0; border-radius:50%;
-            border:2.5px solid transparent;
-            border-top-color:rgba(45,212,191,.92);
-            border-right-color:rgba(16,185,129,.45);
-            box-shadow:0 0 28px rgba(16,185,129,.3),inset 0 0 22px rgba(20,184,166,.12);
-            transform-style:preserve-3d;
-        }
-        .ap-loader__ring:nth-child(2) { inset:13%; transform:rotateY(58deg); border-top-color:rgba(52,211,153,.78); border-right-color:rgba(20,184,166,.42); }
-        .ap-loader__ring:nth-child(3) { inset:26%; transform:rotateX(54deg); border-top-color:rgba(167,243,208,.55); border-right-color:rgba(5,150,105,.35); }
-        .dv-gem-wrap { position:absolute; left:50%; top:50%; width:46%; height:46%; margin:-23% 0 0 -23%; transform-style:preserve-3d; animation:dvGemBobMgr 3.2s ease-in-out infinite alternate; }
-        @keyframes dvGemBobMgr { from { transform:translateZ(26px) rotateY(-8deg) scale(1); } to { transform:translateZ(48px) rotateY(10deg) scale(1.05); } }
-        .dv-gem-img { width:100%; height:100%; border-radius:32%; background:linear-gradient(135deg,rgba(94,234,212,.32),rgba(52,211,153,.28),rgba(45,212,191,.28)); border:2px solid rgba(255,255,255,.2); box-shadow:0 0 0 1px rgba(16,185,129,.4),0 22px 50px rgba(0,0,0,.45),0 0 50px rgba(52,211,153,.35),inset 0 0 30px rgba(255,255,255,.18); overflow:hidden; display:flex; align-items:center; justify-content:center; }
-        .dv-gem-img img { width:100%; height:100%; object-fit:cover; display:block; }
-        .dv-gem-bloom { position:absolute; inset:-30%; border-radius:40%; background:radial-gradient(circle,rgba(52,211,153,.35) 0%,transparent 70%); filter:blur(20px); z-index:-1; animation:dvBloomMgr 2.8s ease-in-out infinite alternate; }
-        @keyframes dvBloomMgr { from{opacity:.55;transform:scale(.92)} to{opacity:1;transform:scale(1.08)} }
     </style>
 </head>
 <body>
-    <div id="bootSplash" class="boot-splash" role="status" aria-live="polite" aria-label="Loading Manager Portal">
-        <div class="ap-loader" aria-hidden="true">
-            <div class="ap-loader__spin">
-                <div class="ap-loader__ring"></div>
-                <div class="ap-loader__ring"></div>
-                <div class="ap-loader__ring"></div>
-                <div class="dv-gem-wrap">
-                    <div class="dv-gem-bloom" aria-hidden="true"></div>
-                    <div class="dv-gem-img">
-                        <img src="1.jpg" alt="AttendPro" decoding="async" onerror="this.style.display='none'" />
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div class="boot-splash__brand">Attend<span>Pro</span></div>
-        <div class="boot-splash__tag">Manager · Dashverse</div>
-    </div>
     <div class="bg-fx"><div class="orb o1"></div><div class="orb o2"></div></div>
     <div class="dv-brand-layer"><div class="dv-prism-mgr"></div><div class="dv-prism-mgr dv-prism-mgr--b"></div></div>
-    <canvas id="dvCanvas" class="dv-canvas" data-palette="emerald" aria-hidden="true"></canvas>
+    <canvas id="dvCanvas" class="dv-canvas" data-palette="emerald" data-dv-fx="inline" aria-hidden="true"></canvas>
     <div class="grid-bg"></div>
     <div class="toast-box" id="toastBox"></div>
 
@@ -525,6 +506,25 @@
             <div class="dm-body" id="dmBody">
                 <div class="dm-empty"><div class="de-ic">📭</div><p>No data</p></div>
             </div>
+        </div>
+    </div>
+
+    <!-- LOADING OVERLAY -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-card">
+            <div class="loading-cine" aria-hidden="true">
+                <div class="loading-cine__halo"></div>
+                <div class="loading-cine__ringfx"></div>
+                <div class="loading-cine__spin">
+                    <span class="loading-cine__sat"></span>
+                    <span class="loading-cine__sat"></span>
+                    <span class="loading-cine__sat"></span>
+                </div>
+                <div class="loading-cine__core"></div>
+            </div>
+            <div class="loading-title">📊 Loading Data</div>
+            <div class="loading-subtitle">Please wait, data is fetching...</div>
+            <div class="loading-rail"><span></span></div>
         </div>
     </div>
 
@@ -838,7 +838,7 @@
         };
 
         let myEmail='', myName='', myRole='', selRoleTab='manager';
-        let allEmp=[], allAtt=[], allLv=[], myTeam=[], myTeamAtt=[], myTeamLv=[], myContractAlerts=[];
+        let allEmp=[], allAtt=[], allLv=[], myTeam=[], myTeamAtt=[], myTeamLv=[], myContractAlerts=[], myMissingLoginAlerts=[];
         let confCb=null, isLive=false, dataLoaded=false;
 
         // Detail modal state
@@ -930,6 +930,7 @@
 
         function togglePw(){const inp=document.getElementById('mgrPass');const btn=document.getElementById('pwToggle');if(inp.type==='password'){inp.type='text';btn.textContent='🙈';}else{inp.type='password';btn.textContent='👁️';}}
 
+
         document.addEventListener('DOMContentLoaded',()=>{
             document.getElementById('mgrEmail').addEventListener('keydown',e=>{if(e.key==='Enter')document.getElementById('mgrPass').focus();});
             document.getElementById('mgrPass').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
@@ -965,6 +966,18 @@
             document.getElementById('loginPg').style.display='none';document.getElementById('mgrApp').classList.add('on');initApp();toast('👋 Welcome!',`Hello, ${myName}!`,'ok');if(navigator.vibrate)navigator.vibrate([30,20,30]);
         }
 
+        function showLoadingOverlay(){
+            const overlay = document.getElementById('loadingOverlay');
+            if(overlay) overlay.classList.add('on');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function hideLoadingOverlay(){
+            const overlay = document.getElementById('loadingOverlay');
+            if(overlay) overlay.classList.remove('on');
+            document.body.style.overflow = '';
+        }
+
         function logout(){sessionStorage.removeItem('mgrSession');clearCache();dataLoaded=false;document.getElementById('loginPg').style.display='flex';document.getElementById('mgrApp').classList.remove('on');document.getElementById('mgrEmail').value='';document.getElementById('mgrPass').value='';myEmail='';myRole='';myName='';allEmp=[];allAtt=[];allLv=[];myTeam=[];myTeamAtt=[];myTeamLv=[];myContractAlerts=[];checkConn();}
 
         function goPortal(dest, isHome){
@@ -979,7 +992,7 @@
             window.location.href = dest;
         }
         function loginMsg(msg,type){const cls={ok:'al-ok',err:'al-err',warn:'al-warn',info:'al-info'};document.getElementById('loginAlert').innerHTML=`<div class="alert ${cls[type]}">${msg}</div>`;setTimeout(()=>{const el=document.getElementById('loginAlert');if(el)el.innerHTML=''},6000);}
-        function initApp(){document.getElementById('todayDateLbl').textContent=new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});updateSidebarUser();if(!dataLoaded)loadAll();initDateButtonListeners();}
+        function initApp(){document.getElementById('todayDateLbl').textContent=new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});updateSidebarUser();if(!dataLoaded){showLoadingOverlay();loadAll();}initDateButtonListeners();}
         function initDateButtonListeners(){document.querySelectorAll('input[type="date"]').forEach(input=>{if(input.dataset.dateBtnInit==='1')return;const openPicker=()=>{if(typeof input.showPicker==='function')input.showPicker();};input.setAttribute('inputmode','none');input.addEventListener('pointerdown',e=>{e.preventDefault();openPicker();});input.addEventListener('keydown',e=>{e.preventDefault();});input.dataset.dateBtnInit='1';})};
         function updateSidebarUser(){document.getElementById('sbAv').textContent=ini(myName);document.getElementById('sbUserName').textContent=myName;document.getElementById('sbUserEmail').textContent=myEmail;document.getElementById('sbUserRole').textContent='👔 Manager';}
         function openSB(){document.getElementById('sb').classList.add('open');document.getElementById('sbOverlay').classList.add('on');document.body.style.overflow='hidden';}
@@ -1146,10 +1159,21 @@
         async function loadAll(){
             dataLoaded=true;const sk=(cols)=>`<tr>${Array(cols).fill(0).map(()=>`<td><div class="skeleton" style="height:14px;border-radius:5px;"></div></td>`).join('')}</tr>`.repeat(5);
             document.getElementById('todayFullBody').innerHTML=sk(6);document.getElementById('allLvBody').innerHTML=sk(9);document.getElementById('attBody').innerHTML=sk(6);
-            const[er,ar,lr,cr]=await Promise.all([callAPI('getEmployees',{},true),callAPI('getAllAttendance',{},true),callAPI('getAllLeaves',{},true),callAPI('getContractAlerts',{email:myEmail,role:myRole},false)]);
-            if(er.success)allEmp=er.employees||[];if(ar.success)allAtt=ar.attendance||[];if(lr.success)allLv=lr.leaves||[];
-            myContractAlerts=cr&&cr.success?(cr.alerts||[]):buildContractAlertsFromEmployees(allEmp,myEmail,myRole,myName);
+            const today=todayStr();
+            const [er,ar,lr,cr,mr]=await Promise.all([
+                callAPI('getEmployees',{},true),
+                callAPI('getAllAttendance',{},true),
+                callAPI('getAllLeaves',{},true),
+                callAPI('getContractAlerts',{email:myEmail,role:myRole},false),
+                callAPI('getMissingLoginAlerts',{date:today},false)
+            ]);
+            if(er.success) allEmp = er.employees || [];
+            if(ar.success) allAtt = ar.attendance || [];
+            if(lr.success) allLv = lr.leaves || [];
+            if(mr && mr.success) myMissingLoginAlerts = mr.alerts || [];
+            myContractAlerts = cr && cr.success ? (cr.alerts || []) : buildContractAlertsFromEmployees(allEmp,myEmail,myRole,myName);
             filterMyTeam();renderDashboard();renderTeam();renderTodayStatus();renderPendingLeaves();renderAllLeaves();renderAtt();renderTodayFull();
+            hideLoadingOverlay();
         }
 
         function filterMyTeam(){
@@ -1202,7 +1226,8 @@
             const srch=(document.getElementById('teamSrch')?.value||'').toLowerCase();const filtered=myTeam.filter(e=>!srch||`${e.name} ${e.email} ${e.role||''} ${e.department||''}`.toLowerCase().includes(srch));
             document.getElementById('teamCount').textContent=`${myTeam.length} member${myTeam.length!==1?'s':''}`;
             if(!myTeam.length){document.getElementById('teamGrid').innerHTML=`<div class="empty" style="grid-column:1/-1"><div class="ei">👥</div><h3>No team members found</h3><p>Ask HR to enter your email <strong>${myEmail}</strong> in the <strong>Manager Email</strong> field of each employee.</p></div>`;document.getElementById('teamAlerts').innerHTML=`<div class="alert al-info">ℹ️ No team members assigned. HR must enter your email <strong>${myEmail}</strong> in the Manager Email field.</div>`;return;}
-            document.getElementById('teamAlerts').innerHTML=myContractAlerts.length?`<div class="alert al-warn">⚠️ ${myContractAlerts.length} team contract${myContractAlerts.length!==1?'s are':' is'} ending within 5 days. Open the dashboard contract card to review them.</div>`:'';
+            const missingAlertHtml = myMissingLoginAlerts.length ? `<div class="alert al-err">⚠️ ${myMissingLoginAlerts.length} team member${myMissingLoginAlerts.length!==1?'s have':' has'} missed login for 5+ days today. Review the absence list.</div>` : '';
+            document.getElementById('teamAlerts').innerHTML = (myContractAlerts.length ? `<div class="alert al-warn">⚠️ ${myContractAlerts.length} team contract${myContractAlerts.length!==1?'s are':' is'} ending within 5 days. Open the dashboard contract card to review them.</div>` : '') + missingAlertHtml;
             if(!filtered.length){document.getElementById('teamGrid').innerHTML=`<div class="empty" style="grid-column:1/-1"><div class="ei">🔍</div><h3>No matching members</h3></div>`;return;}
             const today=todayStr();const presentEmails=new Set(myTeamAtt.filter(a=>(a.date||'').toString().substring(0,10)===today).map(a=>a.email?.toLowerCase()));
             const onLeaveEmails=new Set(myTeamLv.filter(l=>{if(l.status!=='Approved')return false;const f=safeDateStr(l.fromDate),t=safeDateStr(l.toDate);return f&&t&&today>=f&&today<=t;}).map(l=>l.email?.toLowerCase()));
@@ -1454,22 +1479,6 @@
   window.addEventListener('resize', boot);
 
   boot();
-})();
-</script>
-<script>
-(function(){
-    var el=document.getElementById('bootSplash');
-    if(!el)return;
-    function dismiss(){
-        el.classList.add('boot-splash--hide');
-        var rm=function(){ el.style.display='none'; el.removeAttribute('role'); };
-        el.addEventListener('transitionend',function te(e){ if(e.propertyName==='opacity'){ el.removeEventListener('transitionend',te); rm(); } });
-        setTimeout(rm,1200);
-    }
-    var start=Date.now();
-    function go(){ setTimeout(dismiss,Math.max(0,1050-(Date.now()-start))); }
-    if(document.readyState==='complete')go();
-    else window.addEventListener('load',go);
 })();
 </script>
 </body>

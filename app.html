@@ -6,10 +6,11 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#a21caf">
-    <title>AttendPro × Dashverse</title>
+    <title>AttendPro - Dashverse</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="dashverse-ui.css">
     <style>
         :root {
             --p:#e879f9; --p2:#7c3aed; --ac:#22d3ee; --dv-gold:#fbbf24;
@@ -42,6 +43,14 @@
             --dropdown-bg:#ffffff; --dropdown-border:rgba(192,38,211,.22);
             --orb-op:.09
         }
+        .modal-ov { position:fixed; inset:0; background:rgba(7,5,20,.84); backdrop-filter:blur(18px) saturate(1.08); display:none; align-items:center; justify-content:center; padding:20px; z-index:1200; }
+        .modal-card { width:min(520px,100%); background:linear-gradient(155deg,rgba(255,255,255,.08) 0%,rgba(255,255,255,.03) 34%,rgba(0,0,0,.08) 100%),var(--card-solid); border:1px solid var(--gb); border-radius:24px; box-shadow:0 40px 110px rgba(0,0,0,.45); padding:22px; max-height:min(100vh - 40px,calc(100% - 40px)); overflow:auto; }
+        body.modal-open { overflow:hidden; }
+        .modal-hdr { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:16px; }
+        .modal-hdr h3 { font-size:1.05rem; margin:0; }
+        .modal-close { border:none; background:none; color:var(--txt); font-size:1.15rem; cursor:pointer; padding:6px; }
+        .modal-msg { font-size:.92rem; color:var(--muted); margin-bottom:16px; }
+        .modal-actions { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:14px; }
         * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
         html { scroll-behavior:smooth; -webkit-font-smoothing:antialiased; }
         body { font-family:'Outfit','Segoe UI',system-ui,sans-serif; min-height:100vh; min-height:100dvh; color:var(--txt); overflow-x:hidden; padding-bottom:var(--sab); transition:background .4s,color .3s }
@@ -208,8 +217,43 @@
         .btn-ghost { background:var(--inp-bg); color:var(--txt); border:1.5px solid var(--gb); }
         .btn-ghost:hover { background:rgba(232,121,249,.1); border-color:var(--p); color:var(--p); }
         .btn-loading { pointer-events:none; opacity:.78; }
-        .spin { width:18px; height:18px; border:3px solid rgba(255,255,255,.3); border-top-color:#fff; border-radius:50%; animation:sp .75s linear infinite; display:inline-block; flex-shrink:0; }
-        @keyframes sp { from{transform:rotate(0)} to{transform:rotate(360deg)} }
+        .spin { width:22px; height:10px; border:none; border-radius:6px; flex-shrink:0; display:inline-block; vertical-align:middle; background:linear-gradient(90deg,rgba(255,255,255,.16) 0%,rgba(255,255,255,.95) 45%,rgba(255,255,255,.16) 100%); background-size:200% 100%; animation:sp .95s ease-in-out infinite }
+        @keyframes sp { 0%{background-position:100% 50%; opacity:.78} 100%{background-position:-100% 50%; opacity:1} }
+
+        /* LOADING OVERLAY — cinematic */
+        .loading-overlay { position:fixed; inset:0; background:rgba(3,0,20,.96); backdrop-filter:blur(26px) saturate(1.2); display:none; align-items:center; justify-content:center; z-index:999; padding:20px }
+        .loading-overlay.on { display:flex }
+        .loading-card { position:relative; overflow:hidden; isolation:isolate; background:linear-gradient(155deg,rgba(255,255,255,.08) 0%,rgba(255,255,255,.03) 34%,rgba(0,0,0,.08) 100%),var(--card-solid); border:1px solid rgba(232,121,249,.2); border-radius:28px; padding:54px 40px 48px; text-align:center; box-shadow:0 40px 110px rgba(0,0,0,.45),0 0 0 1px rgba(255,255,255,.04) inset; max-width:420px; width:100% }
+        .loading-card::after { content:''; position:absolute; inset:-45% -35%; background:linear-gradient(108deg,transparent 38%,rgba(255,255,255,.11) 50%,transparent 62%); transform:translateX(-70%) rotate(11deg); animation:loading-sheen 4.2s ease-in-out infinite; pointer-events:none; mix-blend-mode:overlay; opacity:.88 }
+        [data-theme="light"] .loading-card::after { opacity:.5; background:linear-gradient(108deg,transparent 38%,rgba(255,255,255,.72) 50%,transparent 62%) }
+        @keyframes loading-sheen { 0%,12%{transform:translateX(-82%) rotate(11deg); opacity:0} 28%{opacity:1} 52%{transform:translateX(88%) rotate(11deg); opacity:.72} 68%,100%{opacity:0; transform:translateX(100%) rotate(11deg)} }
+        .loading-cine { position:relative; width:92px; height:92px; margin:0 auto 26px; transform:translateZ(0) }
+        .loading-cine__halo { position:absolute; inset:4px; border-radius:50%; background:radial-gradient(circle at 50% 42%,rgba(232,121,249,.24) 0%,rgba(124,58,237,.1) 46%,transparent 70%); animation:loading-breathe 3.4s ease-in-out infinite; filter:blur(.3px) }
+        .loading-cine__ringfx { position:absolute; inset:0; border-radius:50%; opacity:.58; background:conic-gradient(from 0deg,transparent 0deg 108deg,rgba(232,121,249,.55) 198deg,rgba(250,250,255,.34) 232deg,transparent 278deg 360deg); animation:loading-chase 2.85s linear infinite; -webkit-mask:radial-gradient(farthest-side,transparent calc(100% - 3px),#000 calc(100% - 2.5px)); mask:radial-gradient(farthest-side,transparent calc(100% - 3px),#000 calc(100% - 2.5px)) }
+        .loading-cine__spin { position:absolute; inset:0; animation:loading-orbit 5.1s cubic-bezier(.4,0,.2,1) infinite }
+        .loading-cine__sat { position:absolute; left:50%; top:50%; width:10px; height:10px; margin:-5px 0 0 -5px; border-radius:50%; background:radial-gradient(circle at 32% 28%,#fff,rgba(245,220,255,.95) 38%,var(--p) 100%); box-shadow:0 0 16px rgba(232,121,249,.55),0 0 32px rgba(124,58,237,.22) }
+        .loading-cine__spin .loading-cine__sat:nth-child(1) { transform:rotate(0deg) translateY(-38px); animation:loading-twinkle 2s ease-in-out infinite }
+        .loading-cine__spin .loading-cine__sat:nth-child(2) { transform:rotate(120deg) translateY(-38px); animation:loading-twinkle 2s ease-in-out .33s infinite }
+        .loading-cine__spin .loading-cine__sat:nth-child(3) { transform:rotate(240deg) translateY(-38px); animation:loading-twinkle 2s ease-in-out .66s infinite }
+        .loading-cine__core { position:absolute; left:50%; top:50%; width:22px; height:22px; margin:-11px 0 0 -11px; border-radius:50%; background:radial-gradient(circle at 40% 35%,rgba(255,255,255,.22),rgba(232,121,249,.14) 55%,transparent 72%); box-shadow:0 0 26px rgba(232,121,249,.22) inset,0 0 22px rgba(232,121,249,.14); animation:loading-core 2.75s ease-in-out infinite }
+        @keyframes loading-chase { to { transform:rotate(360deg) } }
+        @keyframes loading-orbit { to { transform:rotate(-360deg) } }
+        @keyframes loading-breathe { 0%,100%{opacity:.7; transform:scale(.96)} 50%{opacity:1; transform:scale(1.04)} }
+        @keyframes loading-core { 0%,100%{transform:scale(.92); opacity:.62} 50%{transform:scale(1.06); opacity:1} }
+        @keyframes loading-twinkle { 0%,100%{box-shadow:0 0 12px rgba(232,121,249,.42),0 0 22px rgba(124,58,237,.12)} 50%{box-shadow:0 0 22px rgba(232,121,249,.88),0 0 38px rgba(255,255,255,.1)} }
+        .loading-rail { height:3px; border-radius:6px; margin:18px auto 0; max-width:220px; background:rgba(255,255,255,.06); overflow:hidden; position:relative; z-index:1 }
+        [data-theme="light"] .loading-rail { background:rgba(124,58,237,.1) }
+        .loading-rail span { display:block; height:100%; width:42%; border-radius:6px; background:linear-gradient(90deg,transparent,rgba(245,232,255,.62) 32%,var(--p) 54%,var(--p2) 78%,transparent); animation:loading-rail 1.82s cubic-bezier(.45,0,.35,1) infinite; transform:translateX(-140%) }
+        @keyframes loading-rail { 0%{transform:translateX(-140%); opacity:.42} 42%{opacity:1} 100%{transform:translateX(340%); opacity:.42} }
+        .loading-title { position:relative; z-index:1; font-size:1.3rem; font-weight:800; color:var(--txt); margin-bottom:8px; letter-spacing:-0.5px }
+        .loading-subtitle { position:relative; z-index:1; font-size:.88rem; color:rgba(245,240,255,.65); line-height:1.6; margin:0 }
+        [data-theme="light"] .loading-subtitle { color:var(--muted) }
+        @media (prefers-reduced-motion: reduce) {
+            .loading-cine__spin, .loading-cine__ringfx { animation-duration:14s !important; animation-timing-function:linear !important }
+            .loading-card::after { animation:none !important; opacity:0 !important }
+            .loading-rail span { animation-duration:3.2s !important }
+            .spin { animation-duration:1.45s !important }
+        }
 
         /* PROFILE CARD */
         .prof-outer { background:var(--card); backdrop-filter:blur(22px); border:1px solid var(--gb); border-radius:var(--r); overflow:visible; transition:var(--tr-3d); transform-style:preserve-3d; animation:shard-in .6s cubic-bezier(.68,-0.55,.27,1.55) forwards; box-shadow:var(--sh); margin-bottom:20px; position:relative; }
@@ -225,7 +269,7 @@
         .sts-no { background:rgba(239,68,68,.1); border:1.5px solid rgba(239,68,68,.35); color:#dc2626; }
         [data-theme="dark"] .sts-ok { color:#34d399; }
         [data-theme="dark"] .sts-no { color:#f87171; }
-        .sts-dot { width:7px; height:7px; border-radius:50%; }
+        .sts-dot { width:7px; height:7px; border-radius:50%; display:none; }
         .sts-ok .sts-dot { background:#10b981; }
         .sts-no .sts-dot { background:#ef4444; animation:blink 1.4s infinite; }
         .emp-status-active { display:inline-flex; align-items:center; gap:5px; padding:4px 12px; border-radius:50px; font-size:.72rem; font-weight:700; background:rgba(16,185,129,.12); border:1px solid rgba(16,185,129,.3); color:#059669; }
@@ -243,9 +287,10 @@
         .btn-leave-full { width:100%; background:linear-gradient(135deg,#f59e0b,#d97706); color:#fff; box-shadow:0 8px 24px rgba(245,158,11,.3); padding:15px 18px; font-size:.97rem; font-weight:700; border-radius:14px; display:flex; align-items:center; justify-content:center; gap:10px; cursor:pointer; border:none; transition:var(--tr-3d); transform-style:preserve-3d; touch-action:manipulation; user-select:none; }
         .btn-leave-full:hover { transform:translateY(-3px) scale(1.02); }
         .btn-leave-full:active { transform:scale(.97); }
-        .btn-logout-full { width:100%; background:rgba(239,68,68,.1); border:1.5px solid rgba(239,68,68,.3); color:#dc2626; padding:12px 18px; font-size:.88rem; font-weight:700; border-radius:14px; display:flex; align-items:center; justify-content:center; gap:8px; cursor:pointer; transition:var(--tr); touch-action:manipulation; }
-        .btn-logout-full:hover { background:rgba(239,68,68,.18); }
-        [data-theme="dark"] .btn-logout-full { color:#f87171; }
+        .btn-workdone-full { width:100%; background:linear-gradient(135deg,#7c3aed,#2563eb); color:#fff; box-shadow:0 8px 24px rgba(124,58,237,.32); padding:15px 18px; font-size:.97rem; font-weight:800; border-radius:14px; display:none; align-items:center; justify-content:center; gap:10px; cursor:pointer; border:none; transition:var(--tr-3d); transform-style:preserve-3d; touch-action:manipulation; user-select:none; }
+        .btn-workdone-full:hover { transform:translateY(-3px) scale(1.02) rotateX(4deg); }
+        .btn-workdone-full:active { transform:scale(.97); }
+        .btn-workdone-full:disabled { opacity:.65; cursor:not-allowed; transform:none!important; }
         .portal-access-section { padding:12px 22px 18px; border-top:1px solid var(--gb); }
         .portal-access-title { font-size:.72rem; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:1.2px; margin-bottom:12px; display:flex; align-items:center; gap:6px; }
         .portal-access-title::after { content:''; flex:1; height:1px; background:linear-gradient(90deg,var(--gb),transparent); }
@@ -437,49 +482,32 @@
         .empty-state .ei { font-size:2.5rem; margin-bottom:8px; }
         .empty-state p { font-size:.85rem; }
 
-        /* BOOT SPLASH */
-        .boot-splash { position:fixed; inset:0; z-index:100000; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:26px; background:radial-gradient(ellipse 100% 70% at 50% -20%,rgba(192,38,211,.25) 0%,transparent 55%),linear-gradient(165deg,#030014 0%,#12081f 55%,#030014 100%); transition:opacity 1s cubic-bezier(.22,1,.36,1),transform 1s cubic-bezier(.22,1,.36,1),filter .65s ease; will-change:opacity,transform; }
-        .boot-splash::before { content:''; position:absolute; inset:0; pointer-events:none; opacity:.9; background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(232,121,249,.03) 2px,rgba(232,121,249,.03) 3px); mix-blend-mode:overlay; }
-        .boot-splash--hide { opacity:0; transform:scale(1.06); filter:blur(16px); pointer-events:none; }
-        .boot-splash__brand { font-size:clamp(1.85rem,5.5vw,2.5rem); font-weight:900; letter-spacing:-.045em; color:#faf5ff; text-shadow:0 6px 40px rgba(232,121,249,.45); }
-        .boot-splash__brand span { background:linear-gradient(135deg,#f0abfc,#22d3ee,#fde68a); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
-        .boot-splash__tag { font-size:.74rem; font-weight:600; letter-spacing:.32em; text-transform:uppercase; color:rgba(250,245,255,.42); }
-        .ap-loader { width:min(240px,52vw); height:min(240px,52vw); max-width:260px; max-height:260px; position:relative; display:grid; place-items:center; perspective:1200px; }
-        .ap-loader__spin { position:absolute; inset:0; display:grid; place-items:center; transform-style:preserve-3d; animation:ap-orbit 14s linear infinite; }
-        @keyframes ap-orbit { from{transform:rotateX(58deg) rotateZ(0deg)} to{transform:rotateX(58deg) rotateZ(360deg)} }
-        .ap-loader__ring { position:absolute; inset:0; border-radius:50%; border:2.5px solid transparent; border-top-color:rgba(232,121,249,.88); border-right-color:rgba(124,58,237,.4); box-shadow:0 0 32px rgba(232,121,249,.3); transform-style:preserve-3d; }
-        .ap-loader__ring:nth-child(2) { inset:11%; transform:rotateY(56deg); border-top-color:rgba(124,58,237,.75); }
-        .ap-loader__ring:nth-child(3) { inset:23%; transform:rotateX(52deg); border-top-color:rgba(34,211,238,.55); }
-        .dv-gem-wrap { position:absolute; left:50%; top:50%; width:42%; aspect-ratio:1; display:flex; align-items:center; justify-content:center; transform:translate(-50%,-50%); transform-style:preserve-3d; animation:dvGemBob 3.2s ease-in-out infinite alternate; }
-        @keyframes dvGemBob { from{transform:translate(-50%,-50%) translateZ(26px) rotateY(-8deg) scale(1)} to{transform:translate(-50%,-50%) translateZ(48px) rotateY(10deg) scale(1.05)} }
-        .dv-gem-img { display:block; width:100%; height:100%; border-radius:32%; background:linear-gradient(135deg,rgba(232,121,249,.32),rgba(124,58,237,.28),rgba(34,211,238,.28)); border:2px solid rgba(255,255,255,.22); box-shadow:0 0 0 1px rgba(232,121,249,.35),0 22px 50px rgba(0,0,0,.45),inset 0 0 30px rgba(255,255,255,.18); overflow:hidden; display:flex; align-items:center; justify-content:center; }
-        .dv-gem-img img { width:100%; height:100%; object-fit:cover; display:block; }
-        .dv-gem-bloom { position:absolute; inset:-30%; border-radius:40%; background:radial-gradient(circle,rgba(232,121,249,.35) 0%,transparent 70%); filter:blur(20px); z-index:-1; animation:dvBloom 2.8s ease-in-out infinite alternate; }
-        @keyframes dvBloom { from{opacity:.55;transform:scale(.92)} to{opacity:1;transform:scale(1.08)} }
 
         @media(max-width:580px) { .info-grid{grid-template-columns:1fr 1fr} .frow{grid-template-columns:1fr} .color-legend{gap:6px} }
         @media(max-width:420px) { .main{padding:14px 10px 80px} .card,.hist-card,.lv-form{padding:16px 13px} }
         @media(min-width:600px) { .hdr-time{display:block} .info-grid{grid-template-columns:repeat(auto-fit,minmax(175px,1fr))} }
         @media(prefers-color-scheme:dark) { .fsel,.ftxt,.finp{color-scheme:dark} }
     </style>
+    <script src="firebase.js"></script>
 </head>
 <body>
-<div id="bootSplash" class="boot-splash" role="status" aria-live="polite">
-    <div class="ap-loader" aria-hidden="true">
-        <div class="ap-loader__spin">
-            <div class="ap-loader__ring"></div>
-            <div class="ap-loader__ring"></div>
-            <div class="ap-loader__ring"></div>
-            <div class="dv-gem-wrap">
-                <div class="dv-gem-bloom"></div>
-                <div class="dv-gem-img">
-                    <img src="1.jpg" alt="AttendPro" decoding="async" onerror="this.style.display='none'" />
-                </div>
+<!-- LOADING OVERLAY -->
+<div class="loading-overlay" id="loadingOverlay">
+    <div class="loading-card">
+        <div class="loading-cine" aria-hidden="true">
+            <div class="loading-cine__halo"></div>
+            <div class="loading-cine__ringfx"></div>
+            <div class="loading-cine__spin">
+                <span class="loading-cine__sat"></span>
+                <span class="loading-cine__sat"></span>
+                <span class="loading-cine__sat"></span>
             </div>
+            <div class="loading-cine__core"></div>
         </div>
+        <div class="loading-title">📊 Loading Data</div>
+        <div class="loading-subtitle">Please wait, data is fetching...</div>
+        <div class="loading-rail"><span></span></div>
     </div>
-    <div class="boot-splash__brand">Attend<span>Pro</span></div>
-    <div class="boot-splash__tag">Dashverse · Animation &amp; AI</div>
 </div>
 
 <div class="bg-fx"><div class="orb o1"></div><div class="orb o2"></div><div class="orb o3"></div></div>
@@ -531,13 +559,13 @@
     <header class="hdr">
         <div class="logo">
             <div class="logo-ic">
-                <img src="1.jpg" alt="AP" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';"/>
+                <img src="1.png" alt="AP" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';"/>
                 <div class="logo-ic-fallback" style="display:none;">📋</div>
             </div>
             <div class="logo-tx">Attend<span>Pro</span></div>
         </div>
         <div class="hdr-r">
-            <button class="hdr-home-btn" type="button" onclick="window.location.href='index.html?skipSplash=1'" title="Home">🏠</button>
+            <button class="hdr-home-btn" type="button" onclick="window.location.href='index.html'" title="Home">🏠</button>
             <div class="hdr-time"><span class="t" id="hTime"></span><span id="hDate"></span></div>
             <div class="theme-toggle" onclick="toggleTheme()" title="Toggle theme">
                 <div class="theme-toggle-knob" id="themeKnob"><span id="themeIcon">☀️</span></div>
@@ -553,11 +581,11 @@
                     <div class="dv-hero-glow"></div>
                     <div class="ring ring1"></div>
                     <div class="ring ring2"></div>
-                    <img src="1.jpg" alt="Dashverse" class="hero-img" onerror="this.src='https://images.unsplash.com/photo-1497366216548-37526070297c?w=500&h=500&fit=crop'"/>
+                    <img src="1.png" alt="Dashverse" class="hero-img" onerror="this.src='https://images.unsplash.com/photo-1497366216548-37526070297c?w=500&h=500&fit=crop'"/>
                 </div>
-                <p class="hero-kicker">Dashverse Media</p>
+                <p class="hero-kicker">Dashverse</p>
                 <h1 class="hero-title-dv">Mark Your<br>Attendance</h1>
-                <p>Sign in with your Employee ID and password</p>
+                <p>Sign in with your company email and password</p>
                 <div class="date-badge">📅 <span id="curDate"></span></div>
             </div>
 
@@ -565,16 +593,14 @@
                 <div id="connStatus"></div>
                 <div id="loginAlerts"></div>
                 <div class="fgrp">
-                    <label class="flbl">🪪 Employee ID</label>
+                    <label class="flbl">📧 Work Email or Dashverse ID</label>
                     <div class="iw">
-                        <span class="iico">🪪</span>
-                        <input type="text" class="finp" id="loginEmpId"
-                               placeholder="Please enter your Employee ID"
-                               autocomplete="username" autocapitalize="characters"
-                               autocorrect="off" spellcheck="false"
+                        <span class="iico">📧</span>
+                        <input type="text" class="finp" id="loginEmail"
+                               placeholder="@dashverse.ai"
+                               autocomplete="username" autocorrect="off" spellcheck="false"
                                enterkeyhint="next"/>
                     </div>
-                    <div class="hint">💡 Your Employee ID was provided by HR when your account was created</div>
                 </div>
                 <div class="fgrp">
                     <label class="flbl">🔒 Password</label>
@@ -587,12 +613,52 @@
                                style="padding-right:46px;"/>
                         <button type="button" class="show-pass-btn" onclick="togglePassVisibility()" id="showPassBtn">👁️</button>
                     </div>
-                    <div class="hint">🔑 Your password was auto-generated from your email & phone number by HR</div>
+                    
                 </div>
                 <button class="btn btn-p btn-fw" id="loginBtn" type="submit">
                     🔐 Sign In
                 </button>
+                <div class="hint-box" style="margin-top:14px;text-align:center;">
+                    <a class="lnk" href="#" onclick="openForgotPassword();return false;">Forgot password?</a>
+                </div>
             </form>
+            <div id="passwordModalOv" class="modal-ov" onclick="if(event.target===this) closePasswordModal();">
+                <div class="modal-card">
+                    <div class="modal-hdr">
+                        <h3 id="passwordModalTitle">Reset your password</h3>
+                        <button type="button" class="modal-close" onclick="closePasswordModal()">✕</button>
+                    </div>
+                    <div id="passwordModalMsg" class="modal-msg">Enter your work email or Dashverse ID to update your password.</div>
+                    <div class="fgrp">
+                        <label class="flbl">📧 Work Email or Dashverse ID</label>
+                        <div class="iw">
+                            <span class="iico">📧</span>
+                            <input class="finp" type="text" id="passwordModalEmail" placeholder="name@dashverse.ai or DASH260001" autocomplete="username" />
+                        </div>
+                    </div>
+                    <div class="fgrp">
+                        <label class="flbl">🔒 New Password</label>
+                        <div class="iw">
+                            <span class="iico">🔒</span>
+                            <input class="finp" type="password" id="passwordModalNew" placeholder="Choose a new password" autocomplete="new-password" />
+                        </div>
+                    </div>
+                    <div class="fgrp">
+                        <label class="flbl">🔒 Confirm Password</label>
+                        <div class="iw">
+                            <span class="iico">🔒</span>
+                            <input class="finp" type="password" id="passwordModalConfirm" placeholder="Confirm new password" autocomplete="new-password" />
+                        </div>
+                    </div>
+                    <div class="modal-actions">
+                        <button class="btn btn-p btn-fw" id="passwordModalSubmit" type="button" onclick="handlePasswordModalSubmit()">Save Password</button>
+                        <button class="btn btn-ghost btn-fw" type="button" onclick="closePasswordModal()">Cancel</button>
+                    </div>
+                    <div class="hint-box" style="margin-top:10px;text-align:center;">
+                        <a class="lnk" href="#" onclick="sendForgotPassword();return false;">Send password reset email</a>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <!-- ===== DASHBOARD PAGE ===== -->
@@ -647,7 +713,7 @@
                 <div class="prof-actions-col">
                     <button class="btn-mark-full" id="markBtn" onclick="markAttendance()">✅ Mark Attendance</button>
                     <button class="btn-leave-full" onclick="showLeave()">📅 Apply Leave</button>
-                    <button class="btn-logout-full" onclick="logoutEmployee()">🚪 Sign Out</button>
+                    <button class="btn-workdone-full" id="workDoneBtn" onclick="openEmployeeWorkDoneLog()">📝 Work Done Log</button>
                 </div>
 
                 <div class="portal-access-section" id="portalAccessSection" style="display:none;">
@@ -758,6 +824,7 @@
 <script>
     // ===== THEME =====
     const THEME_KEY = 'atp_theme';
+    const EMP_AUTO_RESUME_KEY = 'empAllowAutoResume';
     let currentTheme = localStorage.getItem(THEME_KEY) || 'light';
     function applyTheme(t) {
         currentTheme = t;
@@ -867,12 +934,17 @@
         if(action==='ping') return {success:true};
         if(action==='employeeLogin') {
             const emps = lsGet(LS.EMP);
+            const wantedEmail = (data.email||'').toString().trim().toLowerCase();
             const wantedId = (data.empId||'').toString().trim().toUpperCase();
             const wantedPass = (data.password||'').toString().trim();
-            if(!wantedId) return {success:false,message:'Employee ID is required'};
+            if(!wantedEmail && !wantedId) return {success:false,message:'Work email or Employee ID is required'};
             if(!wantedPass) return {success:false,message:'Password is required'};
-            const found = emps.find(e=>(e.id||e.empId||'').toString().trim().toUpperCase()===wantedId);
-            if(!found) return {success:false,message:'Employee ID not found. Please contact HR.'};
+            const found = emps.find(e=>{
+                const emailMatch = wantedEmail && ((e.email||'').toString().trim().toLowerCase()===wantedEmail);
+                const idMatch = wantedId && ((e.id||e.empId||'').toString().trim().toUpperCase()===wantedId);
+                return emailMatch || idMatch;
+            });
+            if(!found) return {success:false,message:'Employee not found. Please check credentials and contact HR.'};
             const status = String(found.status||'Active').toLowerCase();
             if(status==='inactive') return {success:false,message:'Your account is inactive. Please contact HR.'};
             const storedPass = (found.password||'').toString().trim();
@@ -919,6 +991,14 @@
             if(i>-1){emps[i].currentProject=data.project;lsSet(LS.EMP,emps);}
             return{success:true};
         }
+        if(action==='getEmployeeEmail') {
+            const emps=lsGet(LS.EMP);
+            const wantedId=(data.empId||data.id||'').toString().trim().toUpperCase();
+            if(!wantedId)return{success:false,message:'Employee ID is required'};
+            const found=emps.find(e=>(e.id||e.empId||'').toString().trim().toUpperCase()===wantedId);
+            if(!found)return{success:false,message:'Employee not found.'};
+            return{success:true,email:found.email};
+        }
         return{success:false,message:'Unsupported offline action'};
     }
 
@@ -947,6 +1027,8 @@
     let emp = null, attData = [], lvData = [], marked = false, projectList = [];
     let empSelectedProjects = new Set();
     let loginInFlight = false;
+    let pendingFirstLoginEmail = '';
+    let pendingFirstLoginPassword = '';
 
     // ===== FAB & PIN =====
     let fabOpen = false, currentPortal = null, pinValue = '';
@@ -1018,29 +1100,35 @@
         else { inp.type = 'password'; btn.textContent = '👁️'; }
     }
 
+    function showLoadingOverlay(){
+        const overlay = document.getElementById('loadingOverlay');
+        if(overlay) overlay.classList.add('on');
+        document.body.style.overflow = 'hidden';
+    }
+
+    function hideLoadingOverlay(){
+        const overlay = document.getElementById('loadingOverlay');
+        if(overlay) overlay.classList.remove('on');
+        document.body.style.overflow = '';
+    }
+
+
     // ===== INIT =====
     document.addEventListener('DOMContentLoaded', ()=>{
         tick(); setInterval(tick, 1000);
         setMinDates();
-        document.getElementById('loginEmpId').addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); document.getElementById('loginPassword').focus(); } });
+        document.getElementById('pgLogin')?.classList.add('on');
+        document.getElementById('pgDash')?.classList.remove('on');
+        document.getElementById('loginEmail').addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); document.getElementById('loginPassword').focus(); } });
         document.getElementById('loginPassword').addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); handleLogin(e); } });
         checkConnFast();
-        loadProjectsBackground();
-        document.addEventListener('click', e=>{ if(!e.target.closest('#empProjWrap')) closeEmpMS(); });
-        initDateButtonListeners();
-
-        // Auto-login if session exists
-        const savedEmpId = sessionStorage.getItem('empLoggedIn');
-        const savedEmpData = sessionStorage.getItem('empData');
-        if(savedEmpId && savedEmpData) {
-            try {
-                emp = JSON.parse(savedEmpData);
-                reloadEmpData();
-            } catch(e) {
-                sessionStorage.removeItem('empLoggedIn');
-                sessionStorage.removeItem('empData');
-            }
-        }
+            loadProjectsBackground();
+            initFirebaseAuth();
+            applyHolidayUI();
+        // Always start on the login screen instead of auto-restoring a cached employee session.
+        sessionStorage.removeItem('empLoggedIn');
+        sessionStorage.removeItem('empData');
+        sessionStorage.removeItem(EMP_AUTO_RESUME_KEY);
     });
 
     function initDateButtonListeners() {
@@ -1095,60 +1183,11 @@
     function handleLogin(evt) {
         if(evt?.preventDefault) evt.preventDefault();
         if(loginInFlight) return;
-        const empIdEl = document.getElementById('loginEmpId');
-        if(empIdEl){ empIdEl.value = empIdEl.value.trim().toUpperCase(); empIdEl.blur(); }
         setTimeout(()=>{ doLogin(); }, 80);
     }
 
-    async function doLogin() {
-        if(loginInFlight) return;
-        const empIdEl = document.getElementById('loginEmpId');
-        const passEl = document.getElementById('loginPassword');
-        const empId = (empIdEl?.value||'').trim().toUpperCase();
-        const password = (passEl?.value||'').trim();
-
-        if(!empId){ showAlert('loginAlerts','⚠️ Please enter your Employee ID','warn'); shakeField(empIdEl); return; }
-        if(!password){ showAlert('loginAlerts','⚠️ Please enter your password','warn'); shakeField(passEl); return; }
-
-        const btn = document.getElementById('loginBtn');
-        loginInFlight = true;
-        btn.disabled = true; btn.innerHTML = '<div class="spin"></div> Signing in...';
-        clrAlert('loginAlerts');
-
-        try {
-            if(!projectList.length) await loadProjectsBackground();
-            const res = await callAPI('employeeLogin',{empId, password});
-
-            if(res.success && res.employee) {
-                emp = res.employee;
-                sessionStorage.setItem('empLoggedIn', emp.id || empId);
-                sessionStorage.setItem('empData', JSON.stringify(emp));
-                // Load attendance & leaves
-                const [attRes, lvRes] = await Promise.all([
-                    callAPI('getAttendance',{email: emp.email},true),
-                    callAPI('getLeaves',{email: emp.email},true)
-                ]);
-                attData = attRes.success ? (attRes.attendance || []) : [];
-                lvData = lvRes.success ? (lvRes.leaves || []) : [];
-                loadEmpDashboard();
-                toast('👋 Welcome!',`Hello, ${emp.name}!`,'ok');
-                if(navigator.vibrate) navigator.vibrate(30);
-            } else {
-                showAlert('loginAlerts',`❌ ${res.message||'Login failed. Please check your credentials.'}`,'err');
-                shakeField(passEl);
-                toast('❌ Login Failed', res.message||'Invalid credentials','err');
-            }
-        } catch(err) {
-            showAlert('loginAlerts','❌ Unable to connect. Please try again.','err');
-            toast('❌ Error','Connection failed','err');
-            console.error('Login failed',err);
-        } finally {
-            btn.disabled = false; btn.innerHTML = '🔐 Sign In';
-            loginInFlight = false;
-        }
-    }
-
     async function reloadEmpData() {
+        showLoadingOverlay();
         try {
             const [attRes, lvRes] = await Promise.all([
                 callAPI('getAttendance',{email: emp.email},true),
@@ -1157,6 +1196,7 @@
             attData = attRes.success ? (attRes.attendance || []) : [];
             lvData = lvRes.success ? (lvRes.leaves || []) : [];
         } catch(e) { attData = []; lvData = []; }
+        finally { hideLoadingOverlay(); }
         loadEmpDashboard();
     }
 
@@ -1170,11 +1210,16 @@
             initEmpProjectDropdown();
             setupForEmployeeStatus();
             if (emp?.email) checkEmpPortalAccess(emp.email);
+            applyHolidayUI();
         }, 120);
     }
 
-    function logoutEmployee() {
+    async function logoutEmployee() {
         if(!confirm('Sign out of your account?')) return;
+        sessionStorage.removeItem(EMP_AUTO_RESUME_KEY);
+        if(window.firebase && firebase.auth) {
+            await firebase.auth().signOut().catch(()=>{});
+        }
         emp = null; attData = []; lvData = []; marked = false; empSelectedProjects.clear();
         empPortalRoles = [];
         const portalSection = document.getElementById('portalAccessSection');
@@ -1184,12 +1229,412 @@
         CACHE.clearAll();
         document.getElementById('pgDash').classList.remove('on');
         document.getElementById('pgLogin').classList.add('on');
-        document.getElementById('loginEmpId').value = '';
+        document.getElementById('loginEmail').value = '';
         document.getElementById('loginPassword').value = '';
         const btn = document.getElementById('loginBtn');
         btn.disabled = false; btn.innerHTML = '🔐 Sign In';
         clrAlert('dashAlerts'); clrAlert('loginAlerts');
         toast('👋 Signed Out','See you next time!','info');
+    }
+
+    async function initFirebaseAuth() {
+        if (window.__firebaseCompatReady) {
+            await window.__firebaseCompatReady;
+        }
+        const cfg = window.FIREBASE_CONFIG || window.firebaseConfig;
+        if(typeof firebase === 'undefined' || !cfg || !cfg.apiKey || cfg.apiKey.startsWith('YOUR_')) return;
+        try {
+            if(!firebase.apps.length) firebase.initializeApp(cfg);
+            firebase.auth().onAuthStateChanged(async user => {
+                if(user && user.email && sessionStorage.getItem(EMP_AUTO_RESUME_KEY) === '1') {
+                    await loadEmployeeProfile(user.email.toLowerCase().trim(), true);
+                }
+            });
+            if (firebase.auth().currentUser && sessionStorage.getItem(EMP_AUTO_RESUME_KEY) !== '1') {
+                await firebase.auth().signOut().catch(() => {});
+            }
+        } catch(err) {
+            console.warn('Firebase init failed', err);
+        }
+    }
+
+    function openForgotPassword() {
+        showPasswordModal('reset');
+    }
+
+    function openChangePasswordModal() {
+        showPasswordModal('change');
+    }
+
+    function forceFirstLoginPasswordChange(employee) {
+        const ov = document.getElementById('passwordModalOv');
+        showPasswordModal('change');
+        document.getElementById('passwordModalTitle').textContent = '🔐 Set a New Password';
+        document.getElementById('passwordModalMsg').textContent = `Welcome ${employee.name || ''}! For security, please choose a new password before continuing.`;
+        const emailField = document.getElementById('passwordModalEmail');
+        if (emailField) { emailField.value = employee.email || ''; emailField.readOnly = true; }
+        ov.dataset.forced = '1';
+        ov.querySelectorAll('.modal-close, .btn-ghost').forEach(b => b.style.display = 'none');
+        const hintBox = ov.querySelector('.hint-box');
+        if (hintBox) hintBox.style.display = 'none';
+        ov.onclick = null;
+        showAlert('loginAlerts', '🔐 First-time login: please set a new password to continue.', 'warn');
+    }
+
+    function showPasswordModal(mode) {
+        const title = mode === 'change' ? 'Change your password' : 'Reset your password';
+        const msg = mode === 'change'
+            ? 'Enter your work email and choose a new password to update your account.'
+            : 'Enter your work email and choose a new password, or send a reset email.';
+        document.getElementById('passwordModalTitle').textContent = title;
+        document.getElementById('passwordModalMsg').textContent = msg;
+        document.getElementById('passwordModalEmail').value = (document.getElementById('loginEmail')?.value || '').trim().toLowerCase();
+        document.getElementById('passwordModalNew').value = '';
+        document.getElementById('passwordModalConfirm').value = '';
+        const showPasswordFields = mode === 'change';
+        document.getElementById('passwordModalNew').closest('.fgrp').style.display = showPasswordFields ? '' : 'none';
+        document.getElementById('passwordModalConfirm').closest('.fgrp').style.display = showPasswordFields ? '' : 'none';
+        document.body.classList.add('modal-open');
+        document.getElementById('passwordModalOv').style.display = 'flex';
+        document.getElementById('passwordModalSubmit').textContent = mode === 'change' ? 'Save Password' : 'Send Reset Email';
+        document.getElementById('passwordModalOv').dataset.mode = mode;
+    }
+
+    function closePasswordModal() {
+        const ov = document.getElementById('passwordModalOv');
+        if (ov.dataset.forced === '1') {
+            toast('🔒 Required', 'You must set a new password to continue.', 'warn');
+            return;
+        }
+        ov.style.display = 'none';
+        ov.dataset.mode = '';
+        document.body.classList.remove('modal-open');
+        const emailField = document.getElementById('passwordModalEmail');
+        if (emailField) emailField.readOnly = false;
+    }
+
+    function canUseFirebaseAuth() {
+        const cfg = window.FIREBASE_CONFIG || window.firebaseConfig;
+        return window.firebase &&
+            cfg &&
+            cfg.apiKey &&
+            !cfg.apiKey.startsWith('YOUR_');
+    }
+
+    async function resolveEmployeeContext(inputValue) {
+        const raw = (inputValue || '').trim();
+        if (!raw) return { success: false, message: 'Enter your work email or Dashverse ID.' };
+
+        const isEmail = raw.includes('@');
+        const email = isEmail ? raw.toLowerCase() : '';
+        const empId = !isEmail ? raw.toUpperCase() : '';
+        const res = isEmail
+            ? await callAPI('getEmployee', { email }, true)
+            : await callAPI('getEmployeeById', { empId }, true);
+
+        if (!res.success || !res.employee) {
+            return { success: false, message: 'No employee profile found. Please ask HR to create your profile.' };
+        }
+
+        const employee = res.employee;
+        const status = String(employee.status || 'Active').toLowerCase();
+        if (status === 'inactive') {
+            return { success: false, message: 'Your account is inactive. Please contact HR.' };
+        }
+
+        const resolvedEmail = (employee.email || email || '').toString().trim().toLowerCase();
+        if (!resolvedEmail) {
+            return { success: false, message: 'Employee profile is missing a work email. Please contact HR.' };
+        }
+
+        return { success: true, employee, email: resolvedEmail, empId };
+    }
+
+    async function doLogin() {
+        if (loginInFlight) return;
+        const emailEl = document.getElementById('loginEmail');
+        const passEl = document.getElementById('loginPassword');
+        const inputValue = (emailEl?.value || '').trim();
+        const password = (passEl?.value || '').trim();
+
+        if (!inputValue) { showAlert('loginAlerts', 'Please enter your email or Dashverse ID', 'warn'); shakeField(emailEl); return; }
+        if (!password) { showAlert('loginAlerts', 'Please enter your password', 'warn'); shakeField(passEl); return; }
+
+        const btn = document.getElementById('loginBtn');
+        loginInFlight = true;
+        btn.disabled = true;
+        btn.innerHTML = '<div class="spin"></div> Signing in...';
+        clrAlert('loginAlerts');
+
+        try {
+            if (window.__firebaseCompatReady) {
+                await window.__firebaseCompatReady;
+            }
+            if (!canUseFirebaseAuth()) {
+                showAlert('loginAlerts', window.__firebaseCompatError || 'Firebase login is not configured right now. Please contact HR.', 'err');
+                toast('Login Failed', 'Firebase login is unavailable', 'err');
+                return;
+            }
+
+            if (!projectList.length) await loadProjectsBackground();
+            const profile = await resolveEmployeeContext(inputValue);
+            if (!profile.success) {
+                showAlert('loginAlerts', profile.message, 'err');
+                shakeField(emailEl);
+                toast('Login Failed', profile.message, 'err');
+                return;
+            }
+
+            try {
+                await firebase.auth().signInWithEmailAndPassword(profile.email, password);
+            } catch (err) {
+                const code = (err.code || '').toString();
+                console.warn('Firebase login failed:', err);
+                if (code === 'auth/user-not-found') {
+                    if (profile.employee && profile.employee.mustChangePassword) {
+                        emp = profile.employee;
+                        pendingFirstLoginEmail = profile.email;
+                        pendingFirstLoginPassword = '';
+                        forceFirstLoginPasswordChange(emp);
+                        return;
+                    }
+                    showAlert('loginAlerts', 'Your employee profile exists, but your Firebase login is not ready yet. Please contact HR.', 'err');
+                } else if (code === 'auth/wrong-password' || code === 'auth/invalid-credential' || code === 'auth/invalid-login-credentials') {
+                    showAlert('loginAlerts', 'Invalid email or password.', 'err');
+                } else if (code === 'auth/network-request-failed') {
+                    showAlert('loginAlerts', 'Unable to connect to Firebase. Please try again.', 'err');
+                } else {
+                    showAlert('loginAlerts', err.message || 'Login failed.', 'err');
+                }
+                shakeField(passEl);
+                toast('Login Failed', err.message || 'Invalid credentials', 'err');
+                return;
+            }
+
+            emp = profile.employee;
+            if (emp.mustChangePassword) {
+                pendingFirstLoginEmail = emp.email;
+                pendingFirstLoginPassword = password;
+                forceFirstLoginPasswordChange(emp);
+                return;
+            }
+
+            callAPI('updateEmployee', { email: profile.email, password, mustChangePassword: false }).catch(() => {});
+
+            sessionStorage.setItem('empLoggedIn', emp.id || emp.email || '');
+            sessionStorage.setItem('empData', JSON.stringify(emp));
+            sessionStorage.setItem(EMP_AUTO_RESUME_KEY, '1');
+            const [attRes, lvRes] = await Promise.all([
+                callAPI('getAttendance', { email: emp.email }, true),
+                callAPI('getLeaves', { email: emp.email }, true)
+            ]);
+            attData = attRes.success ? (attRes.attendance || []) : [];
+            lvData = lvRes.success ? (lvRes.leaves || []) : [];
+            document.getElementById('pgLogin').classList.remove('on');
+            document.getElementById('pgDash').classList.add('on');
+            loadEmpDashboard();
+            toast('Welcome', `Hello, ${emp.name}!`, 'ok');
+            if (navigator.vibrate) navigator.vibrate(30);
+        } catch (err) {
+            showAlert('loginAlerts', 'Unable to connect. Please try again.', 'err');
+            toast('Error', 'Connection failed', 'err');
+            console.error('Login failed', err);
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = 'Sign In';
+            loginInFlight = false;
+        }
+    }
+
+    async function sendForgotPassword() {
+        const inputValue = (document.getElementById('passwordModalEmail')?.value || '').trim();
+        if (!inputValue) { showAlert('loginAlerts', 'Enter your email or Dashverse ID', 'warn'); return; }
+
+        const btn = document.getElementById('passwordModalSubmit');
+        const originalText = btn.textContent;
+        btn.disabled = true;
+        btn.innerHTML = '<div class="spin"></div> Sending...';
+        try {
+            if (window.__firebaseCompatReady) {
+                await window.__firebaseCompatReady;
+            }
+            if (!canUseFirebaseAuth()) {
+                showAlert('loginAlerts', window.__firebaseCompatError || 'Firebase login is not configured right now. Please contact HR.', 'err');
+                return;
+            }
+
+            const profile = await resolveEmployeeContext(inputValue);
+            if (!profile.success) {
+                showAlert('loginAlerts', profile.message, 'err');
+                return;
+            }
+
+            try {
+                await firebase.auth().sendPasswordResetEmail(profile.email);
+            } catch (firebaseErr) {
+                const code = (firebaseErr.code || '').toString();
+                if (code === 'auth/user-not-found') {
+                    showAlert('loginAlerts', 'Your employee profile exists, but your Firebase login is not ready yet. Please contact HR.', 'err');
+                    return;
+                }
+                throw firebaseErr;
+            }
+
+            showAlert('loginAlerts', `Password reset email sent to ${profile.email}.`, 'ok');
+            toast('Password Reset', `Reset email sent to ${profile.email}`, 'ok');
+            closePasswordModal();
+        } catch (err) {
+            showAlert('loginAlerts', err.message || 'Reset request failed.', 'err');
+            console.error(err);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = originalText;
+        }
+    }
+
+    async function handlePasswordModalSubmit() {
+        const mode = document.getElementById('passwordModalOv').dataset.mode;
+        if (mode === 'reset') return sendForgotPassword();
+
+        const emailOrIdInput = (document.getElementById('passwordModalEmail')?.value || '').trim();
+        const password = (document.getElementById('passwordModalNew')?.value || '').trim();
+        const confirmPassword = (document.getElementById('passwordModalConfirm')?.value || '').trim();
+        if (!emailOrIdInput) { showAlert('loginAlerts', 'Enter your email or Dashverse ID', 'warn'); return; }
+        if (!password || password.length < 6) { showAlert('loginAlerts', 'Password should be at least 6 characters', 'warn'); return; }
+        if (password !== confirmPassword) { showAlert('loginAlerts', 'Passwords do not match', 'warn'); return; }
+
+        const btn = document.getElementById('passwordModalSubmit');
+        btn.disabled = true;
+        btn.innerHTML = '<div class="spin"></div> Saving...';
+        try {
+            if (window.__firebaseCompatReady) {
+                await window.__firebaseCompatReady;
+            }
+            if (!canUseFirebaseAuth()) {
+                showAlert('loginAlerts', window.__firebaseCompatError || 'Firebase login is not configured right now. Please contact HR.', 'err');
+                return;
+            }
+
+            const profile = await resolveEmployeeContext(emailOrIdInput);
+            if (!profile.success) {
+                showAlert('loginAlerts', profile.message, 'err');
+                return;
+            }
+
+            const currentUser = firebase.auth && firebase.auth().currentUser;
+            const currentEmail = (currentUser && currentUser.email ? currentUser.email : '').toString().trim().toLowerCase();
+            const ov = document.getElementById('passwordModalOv');
+            const wasForced = ov.dataset.forced === '1';
+
+            if (!currentUser || currentEmail !== profile.email) {
+                if (wasForced && profile.employee && profile.employee.mustChangePassword) {
+                    try {
+                        await firebase.auth().createUserWithEmailAndPassword(profile.email, password);
+                    } catch (firebaseErr) {
+                        const code = (firebaseErr.code || '').toString();
+                        if (code === 'auth/email-already-in-use') {
+                            showAlert('loginAlerts', 'This login already exists. Please use Forgot Password or contact HR.', 'err');
+                            return;
+                        }
+                        throw firebaseErr;
+                    }
+                } else {
+                    showAlert('loginAlerts', 'Please sign in to your own account before changing the password.', 'err');
+                    return;
+                }
+            }
+
+            try {
+                const authUser = firebase.auth && firebase.auth().currentUser;
+                const authEmail = (authUser && authUser.email ? authUser.email : '').toString().trim().toLowerCase();
+                if (!authUser || authEmail !== profile.email) {
+                    showAlert('loginAlerts', 'Unable to verify your Firebase login. Please try again.', 'err');
+                    return;
+                }
+                if (!wasForced || !profile.employee || !profile.employee.mustChangePassword) {
+                    await authUser.updatePassword(password);
+                }
+            } catch (firebaseErr) {
+                const code = (firebaseErr.code || '').toString();
+                if (code === 'auth/requires-recent-login') {
+                    showAlert('loginAlerts', 'For security, please sign in again and then change your password.', 'err');
+                    return;
+                }
+                throw firebaseErr;
+            }
+
+            const res = await callAPI('updateEmployee', { email: profile.email, mustChangePassword: false });
+            if (!res.success) {
+                showAlert('loginAlerts', res.message || 'Could not update employee profile.', 'err');
+                return;
+            }
+
+            ov.dataset.forced = '';
+            ov.querySelectorAll('.modal-close, .btn-ghost').forEach(b => b.style.display = '');
+            const hintBox = ov.querySelector('.hint-box');
+            if (hintBox) hintBox.style.display = '';
+            const emailField = document.getElementById('passwordModalEmail');
+            if (emailField) emailField.readOnly = false;
+            ov.onclick = (e) => { if (e.target === ov) closePasswordModal(); };
+            ov.style.display = 'none';
+            ov.dataset.mode = '';
+
+            emp = { ...(emp || profile.employee), mustChangePassword: false };
+            sessionStorage.setItem('empLoggedIn', emp.id || emp.email || '');
+            sessionStorage.setItem('empData', JSON.stringify(emp));
+
+            if (wasForced) {
+                pendingFirstLoginEmail = '';
+                pendingFirstLoginPassword = '';
+                document.body.classList.remove('modal-open');
+                document.getElementById('pgLogin').classList.remove('on');
+                document.getElementById('pgDash').classList.add('on');
+                loadEmpDashboard();
+                showAlert('loginAlerts', 'Password updated successfully.', 'ok');
+                toast('Password Updated', 'Your new Firebase password is now active.', 'ok');
+            } else {
+                document.body.classList.remove('modal-open');
+                showAlert('loginAlerts', 'Password updated successfully.', 'ok');
+                toast('Password Updated', 'Your password has been changed successfully.', 'ok');
+            }
+        } catch (err) {
+            showAlert('loginAlerts', err.message || 'Unable to update password.', 'err');
+            console.error(err);
+        } finally {
+            btn.disabled = false;
+            document.getElementById('passwordModalSubmit').textContent = 'Save Password';
+        }
+    }
+
+    async function loadEmployeeProfile(email, autoOpen=false) {
+        if(!email) return false;
+        const res = await callAPI('getEmployee',{email},true);
+        if(!res.success || !res.employee) {
+            if (firebase.auth && firebase.auth().currentUser) {
+                await firebase.auth().signOut().catch(() => {});
+            }
+            sessionStorage.removeItem('empLoggedIn');
+            sessionStorage.removeItem('empData');
+            sessionStorage.removeItem(EMP_AUTO_RESUME_KEY);
+            return false;
+        }
+        emp = res.employee;
+        if (emp.mustChangePassword) {
+            sessionStorage.removeItem('empLoggedIn');
+            sessionStorage.removeItem('empData');
+            sessionStorage.removeItem(EMP_AUTO_RESUME_KEY);
+            forceFirstLoginPasswordChange(emp);
+            return false;
+        }
+        sessionStorage.setItem('empLoggedIn', emp.id || emp.email || '');
+        sessionStorage.setItem('empData', JSON.stringify(emp));
+        sessionStorage.setItem(EMP_AUTO_RESUME_KEY, '1');
+        if(autoOpen) {
+            document.getElementById('pgLogin').classList.remove('on');
+            document.getElementById('pgDash').classList.add('on');
+        }
+        loadEmpDashboard();
+        return true;
     }
 
     function shakeField(el) {
@@ -1227,6 +1672,45 @@
             ['📆','Join Date', fmtDate(emp.joinDate)]
         ];
         document.getElementById('infoGrid').innerHTML = items.map(([ic,lbl,val])=>`<div class="info-item" title="${val}"><div class="info-lbl">${ic} ${lbl}</div><div class="info-val">${val}</div></div>`).join('');
+        renderWorkDoneButton();
+    }
+
+    const WORK_DONE_EMPLOYEE_ROLES = [
+        'ai artist intern',
+        'ai artist',
+        'animation artist',
+        'animation artist - intern'
+    ];
+
+    function normalizeWorkDoneEmployeeRole(role) {
+        return (role || '').toString().trim().toLowerCase().replace(/\s+/g, ' ');
+    }
+
+    function canEmployeeUseWorkDone(role) {
+        return WORK_DONE_EMPLOYEE_ROLES.includes(normalizeWorkDoneEmployeeRole(role));
+    }
+
+    function renderWorkDoneButton() {
+        const btn = document.getElementById('workDoneBtn');
+        if (!btn) return;
+        btn.style.display = canEmployeeUseWorkDone(emp && emp.role) ? 'flex' : 'none';
+    }
+
+    function openEmployeeWorkDoneLog() {
+        if (!emp || !canEmployeeUseWorkDone(emp.role)) {
+            showAlert('dashAlerts', 'Work Done Log is available only for AI Artist and Animation Artist roles.', 'err');
+            return;
+        }
+        sessionStorage.setItem('pmSession', JSON.stringify({
+            id: emp.id || '',
+            email: emp.email || '',
+            name: emp.name || '',
+            role: emp.role || '',
+            department: emp.department || '',
+            source: 'employee'
+        }));
+        sessionStorage.setItem('fromIndexPage', '1');
+        window.location.href = 'work-done-log.html';
     }
 
     function checkTodayMark(list) {
@@ -1241,7 +1725,7 @@
             showAlert('dashAlerts',`✅ Last marked present today at <strong>${timeDisplay}</strong>`,'ok');
         } else {
             marked = false;
-            document.getElementById('todaySts').innerHTML = `<div class="sts-badge sts-no"><div class="sts-dot"></div>Not Marked</div>`;
+            document.getElementById('todaySts').innerHTML = `<div class="sts-badge sts-no">Not Marked</div>`;
         }
     }
 
@@ -1251,7 +1735,7 @@
         const t = (latestTime||'').toString().trim();
         const colorEmoji = getColorEmoji(colorLabel||'green');
         btn.innerHTML = t ? `${colorEmoji} Mark Again (${t})` : '✅ Mark Attendance Again';
-        document.getElementById('todaySts').innerHTML = `<div class="sts-badge sts-ok"><div class="sts-dot"></div>Present Today${t?` • <strong>${t}</strong>`:''}</div>`;
+        document.getElementById('todaySts').innerHTML = `<div class="sts-badge sts-ok">Present Today${t?` • <strong>${t}</strong>`:''}</div>`;
     }
 
     function isEmployeeActive() {
@@ -1265,16 +1749,19 @@
         const inactiveMsg = document.getElementById('inactiveMsg');
         const markBtn = document.getElementById('markBtn');
         const leaveBtn = document.querySelector('.btn-leave-full');
+        const workDoneBtn = document.getElementById('workDoneBtn');
         const statusBadge = document.getElementById('empStatusBadge');
         if(isActive) {
             if(inactiveMsg) inactiveMsg.style.display = 'none';
             if(markBtn){ markBtn.disabled=false; markBtn.style.opacity='1'; }
             if(leaveBtn){ leaveBtn.style.pointerEvents='auto'; leaveBtn.style.opacity='1'; }
+            if(workDoneBtn){ workDoneBtn.disabled=false; workDoneBtn.style.opacity='1'; }
             if(statusBadge) statusBadge.innerHTML = `<div class="emp-status-active">✅ Active Employee</div>`;
         } else {
             if(inactiveMsg) inactiveMsg.style.display = 'block';
             if(markBtn){ markBtn.disabled=true; markBtn.innerHTML='🚫 Account Inactive'; }
             if(leaveBtn){ leaveBtn.style.pointerEvents='none'; leaveBtn.style.opacity='.5'; }
+            if(workDoneBtn){ workDoneBtn.disabled=true; workDoneBtn.style.opacity='.5'; }
             if(statusBadge) statusBadge.innerHTML = `<div class="emp-status-inactive">🚫 Account Inactive</div>`;
         }
     }
@@ -1331,7 +1818,7 @@
             sessionStorage.setItem('reportingSession', JSON.stringify({email, role:'reporting', name}));
             window.location.href = 'reporting-manager.html';
         } else if (portalType === 'production') {
-            sessionStorage.setItem('pmSession', JSON.stringify({email, name}));
+            sessionStorage.setItem('pmSession', JSON.stringify({id: emp.id || '', email, name}));
             window.location.href = 'productivity-tracker.html';
         }
     }
@@ -1382,12 +1869,31 @@
     }
 
     // ===== MARK ATTENDANCE =====
+    function isSecondSaturday(d) {
+        if(!d) d = new Date();
+        // Saturday === 6, second Saturday dates are 8..14
+        return d.getDay() === 6 && d.getDate() >= 8 && d.getDate() <= 14;
+    }
+
+    function applyHolidayUI() {
+        const btn = document.getElementById('markBtn');
+        const today = new Date();
+        const ov = document.getElementById('pgDash');
+        if (isSecondSaturday(today)) {
+            if (btn) { btn.disabled = true; btn.innerHTML = '✅ Holiday — Attendance Disabled'; }
+            if (ov) showAlert('dashAlerts','Today is a company holiday (2nd Saturday). Attendance capture is disabled.','info');
+        } else {
+            if (btn) { btn.disabled = false; btn.innerHTML = '✅ Mark Attendance'; }
+        }
+    }
+
     async function markAttendance() {
         if(!isEmployeeActive()){ showAlert('dashAlerts','🚫 Your account is inactive. Please contact HR.','err'); return; }
         const selectedProj = [...empSelectedProjects].join(', ');
         if(projectList.length>0 && empSelectedProjects.size===0){ showAlert('dashAlerts','⚠️ Please select at least one project before marking attendance.','warn'); document.getElementById('empProjTrigger')?.scrollIntoView({behavior:'smooth',block:'center'}); return; }
         const btn = document.getElementById('markBtn');
         const now = new Date();
+        if (isSecondSaturday(now)) { showAlert('dashAlerts','Today is a company holiday (2nd Saturday). Attendance not required.','info'); if(btn) btn.disabled = true; return; }
         const newColor = determineNewCheckInColor(now, attData);
         const tsDisplay = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
         const rawTs = now.toISOString();
@@ -1421,7 +1927,7 @@
                 marked = false;
                 const idx = attData.indexOf(optRec); if(idx>-1) attData.splice(idx,1);
                 btn.disabled = false; btn.innerHTML = '✅ Mark Attendance';
-                document.getElementById('todaySts').innerHTML = `<div class="sts-badge sts-no"><div class="sts-dot"></div>Not Marked</div>`;
+                document.getElementById('todaySts').innerHTML = `<div class="sts-badge sts-no">Not Marked</div>`;
                 if(projectList.length>0){ const w=document.getElementById('projSelectInlineWrap'); if(w) w.style.display='block'; }
                 showAlert('dashAlerts',`❌ ${res.message}`,'err'); renderAttHist(); toast('❌ Failed',res.message,'err');
             }
@@ -1463,7 +1969,7 @@
                     ${r.currentProject?`<div class="hi-proj">🎬 ${r.currentProject}</div>`:''}
                 </div>
                 <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
-                    <div class="sts-badge sts-ok" style="padding:3px 10px;font-size:.68rem;"><div class="sts-dot"></div>Present</div>
+                    <div class="sts-badge sts-ok" style="padding:3px 10px;font-size:.68rem;">Present</div>
                     <div class="att-color-badge att-${colorLabel}">${colorEmoji}</div>
                 </div>
             </div>`;
@@ -1620,41 +2126,166 @@
     }
 </script>
 <script>
-(function(){
-    var canvas=document.getElementById('dvCanvas');
-    if(!canvas||!canvas.getContext)return;
-    var ctx=canvas.getContext('2d'),pts=[],raf=0,w=0,h=0;
-    var img=new Image();img.decoding='async';
-    var reduced=window.matchMedia&&window.matchMedia('(prefers-reduced-motion:reduce)').matches;
-    function theme(){return document.documentElement.getAttribute('data-theme')==='light'?'light':'dark';}
-    function colors(){if(theme()==='light')return{nodeA:'rgba(6,182,212,.75)',nodeB:'rgba(192,38,211,.55)',wash:'rgba(250,232,255,.04)'};return{nodeA:'rgba(34,211,238,.85)',nodeB:'rgba(192,38,211,.7)',wash:'rgba(12,6,32,.06)'};}
-    function countParticles(){return Math.min(110,Math.max(42,Math.floor(Math.max(window.innerWidth*window.innerHeight,1)/22000)));}
-    function initPts(){var n=countParticles();pts=[];for(var i=0;i<n;i++)pts.push({x:Math.random(),y:Math.random(),vx:(Math.random()-.5)*.00035,vy:(Math.random()-.5)*.00035,z:Math.random(),ph:Math.random()*Math.PI*2});}
-    function resize(){var dpr=Math.min(window.devicePixelRatio||1,2);w=canvas.clientWidth;h=canvas.clientHeight;canvas.width=Math.floor(w*dpr);canvas.height=Math.floor(h*dpr);ctx.setTransform(dpr,0,0,dpr,0,0);}
-    var t0=performance.now();
-    function frame(t){
-        var c=colors(),dt=reduced?0:Math.min(.05,(t-t0)/1000);t0=t;
-        ctx.clearRect(0,0,w,h);ctx.fillStyle=c.wash;ctx.fillRect(0,0,w,h);
-        var i,j,dx,dy,d2,maxD2=.045;
-        if(!reduced)for(i=0;i<pts.length;i++){var p=pts[i];p.x+=p.vx*(60*dt*10);p.y+=p.vy*(60*dt*10);if(p.x<0||p.x>1)p.vx*=-1;if(p.y<0||p.y>1)p.vy*=-1;p.ph+=dt*(.4+p.z);}
-        ctx.lineWidth=.6;
-        for(i=0;i<pts.length;i++)for(j=i+1;j<pts.length;j++){dx=pts[i].x-pts[j].x;dy=pts[i].y-pts[j].y;d2=dx*dx+dy*dy;if(d2<maxD2){var a=(1-d2/maxD2)*.55;ctx.strokeStyle=theme()==='light'?'rgba(192,38,211,'+(a*.18)+')':'rgba(232,121,249,'+(a*.22)+')';ctx.beginPath();ctx.moveTo(pts[i].x*w,pts[i].y*h);ctx.lineTo(pts[j].x*w,pts[j].y*h);ctx.stroke();}}
-        for(i=0;i<pts.length;i++){var p2=pts[i];var r=1.1+p2.z*2.2+.35*Math.sin(p2.ph);var g=ctx.createRadialGradient(p2.x*w,p2.y*h,0,p2.x*w,p2.y*h,r*3);g.addColorStop(0,c.nodeA);g.addColorStop(.45,c.nodeB);g.addColorStop(1,'transparent');ctx.fillStyle=g;ctx.beginPath();ctx.arc(p2.x*w,p2.y*h,r,0,Math.PI*2);ctx.fill();}
-        if(img.complete&&img.naturalWidth){ctx.save();ctx.globalAlpha=theme()==='light'?.045:.07;var iw=img.naturalWidth,ih=img.naturalHeight,scale=Math.max(w/iw,h/ih)*1.15,sw=iw*scale,sh=ih*scale,ox=(w-sw)/2+(reduced?0:Math.sin(t*.00015)*18),oy=(h-sh)/2+(reduced?0:Math.cos(t*.00012)*14);ctx.filter=reduced?'blur(64px)':'blur(48px) saturate(1.2)';ctx.drawImage(img,ox,oy,sw,sh);ctx.restore();}
-        if(!reduced)raf=requestAnimationFrame(frame);
+(function () {
+  'use strict';
+
+  if (window.__dashverseFxBooted) return;
+
+  var canvas = document.getElementById('dvCanvas');
+  if (!canvas || !canvas.getContext) return;
+
+  if (canvas.dataset.dvFx === 'inline') return;
+
+  window.__dashverseFxBooted = true;
+
+  var ctx = canvas.getContext('2d');
+  var pts = [];
+  var raf = 0;
+  var w = 0;
+  var h = 0;
+  var t0 = performance.now();
+  var reduced =
+    window.matchMedia &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  var palettes = {
+    default: {
+      dark: { a: 'rgba(34,211,238,.85)', b: 'rgba(192,38,211,.7)', wash: 'rgba(12,6,32,.05)' },
+      light: { a: 'rgba(6,182,212,.75)', b: 'rgba(192,38,211,.55)', wash: 'rgba(250,232,255,.04)' },
+      lineDark: 'rgba(232,121,249,',
+      lineLight: 'rgba(192,38,211,'
+    },
+    emerald: {
+      dark: { a: 'rgba(52,211,153,.85)', b: 'rgba(16,185,129,.7)', wash: 'rgba(5,15,10,.06)' },
+      light: { a: 'rgba(16,185,129,.75)', b: 'rgba(45,212,191,.55)', wash: 'rgba(236,253,245,.04)' },
+      lineDark: 'rgba(52,211,153,',
+      lineLight: 'rgba(16,185,129,'
     }
-    function boot(){cancelAnimationFrame(raf);resize();initPts();t0=performance.now();raf=requestAnimationFrame(frame);}
-    img.onload=function(){boot();};img.onerror=function(){boot();};img.src='1.jpg';
-    window.addEventListener('resize',boot);boot();
-})();
-</script>
-<script>
-(function(){
-    var el=document.getElementById('bootSplash');if(!el)return;
-    function dismiss(){el.classList.add('boot-splash--hide');var rm=function(){el.style.display='none';el.removeAttribute('role');};el.addEventListener('transitionend',function te(e){if(e.propertyName==='opacity'){el.removeEventListener('transitionend',te);rm();}});setTimeout(rm,1200);}
-    var start=Date.now();
-    function go(){setTimeout(dismiss,Math.max(0,1050-(Date.now()-start)));}
-    if(document.readyState==='complete')go();else window.addEventListener('load',go);
+  };
+
+  function theme() {
+    return document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
+  }
+
+  function palette() {
+    var key = canvas.getAttribute('data-palette') || 'default';
+    return palettes[key] || palettes.default;
+  }
+
+  function colors() {
+    var p = palette();
+    return p[theme()];
+  }
+
+  function linePrefix() {
+    var p = palette();
+    return theme() === 'light' ? p.lineLight : p.lineDark;
+  }
+
+  function countParticles() {
+    return Math.min(
+      100,
+      Math.max(36, Math.floor(Math.max(window.innerWidth * window.innerHeight, 1) / 24000))
+    );
+  }
+
+  function initPts() {
+    var n = countParticles();
+    pts = [];
+    for (var i = 0; i < n; i++) {
+      pts.push({
+        x: Math.random(),
+        y: Math.random(),
+        vx: (Math.random() - 0.5) * 0.00032,
+        vy: (Math.random() - 0.5) * 0.00032,
+        z: Math.random(),
+        ph: Math.random() * Math.PI * 2
+      });
+    }
+  }
+
+  function resize() {
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    w = canvas.clientWidth;
+    h = canvas.clientHeight;
+    canvas.width = Math.floor(w * dpr);
+    canvas.height = Math.floor(h * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+
+  function frame(t) {
+    var c = colors();
+    var dt = reduced ? 0 : Math.min(0.05, (t - t0) / 1000);
+    t0 = t;
+
+    ctx.clearRect(0, 0, w, h);
+    ctx.fillStyle = c.wash;
+    ctx.fillRect(0, 0, w, h);
+
+    var i, j, dx, dy, d2, maxD2 = 0.045;
+    var lp = linePrefix();
+
+    if (!reduced) {
+      for (i = 0; i < pts.length; i++) {
+        var p = pts[i];
+        p.x += p.vx * (60 * dt * 10);
+        p.y += p.vy * (60 * dt * 10);
+        if (p.x < 0 || p.x > 1) p.vx *= -1;
+        if (p.y < 0 || p.y > 1) p.vy *= -1;
+        p.ph += dt * (0.4 + p.z);
+      }
+    }
+
+    ctx.lineWidth = 0.6;
+    for (i = 0; i < pts.length; i++) {
+      for (j = i + 1; j < pts.length; j++) {
+        dx = pts[i].x - pts[j].x;
+        dy = pts[i].y - pts[j].y;
+        d2 = dx * dx + dy * dy;
+        if (d2 < maxD2) {
+          var a = (1 - d2 / maxD2) * 0.5;
+          ctx.strokeStyle = lp + (theme() === 'light' ? a * 0.18 : a * 0.22) + ')';
+          ctx.beginPath();
+          ctx.moveTo(pts[i].x * w, pts[i].y * h);
+          ctx.lineTo(pts[j].x * w, pts[j].y * h);
+          ctx.stroke();
+        }
+      }
+    }
+
+    for (i = 0; i < pts.length; i++) {
+      var p2 = pts[i];
+      var r = 1.1 + p2.z * 2.2 + 0.35 * Math.sin(p2.ph);
+      var g = ctx.createRadialGradient(p2.x * w, p2.y * h, 0, p2.x * w, p2.y * h, r * 3);
+      g.addColorStop(0, c.a);
+      g.addColorStop(0.45, c.b);
+      g.addColorStop(1, 'transparent');
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(p2.x * w, p2.y * h, r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    if (!reduced) raf = requestAnimationFrame(frame);
+  }
+
+  var resizeTimer;
+  function boot() {
+    cancelAnimationFrame(raf);
+    resize();
+    initPts();
+    t0 = performance.now();
+    if (!reduced) raf = requestAnimationFrame(frame);
+  }
+
+  function onResize() {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(boot, 120);
+  }
+
+  canvas.dataset.dvFx = 'shared';
+  window.addEventListener('resize', onResize);
+  boot();
 })();
 </script>
 </body>

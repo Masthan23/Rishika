@@ -1,7 +1,7 @@
 const SHEET_ID = '1oqAhb_f0aEKIeF3jgtOdT7Hhu2sO4RTa9To4TJRBVXs';
 
 const EMPLOYEE_HEADERS = [
-  'EmpID', 'Email', 'Password', 'Name', 'Role', 'Department',
+  'EmpID', 'Email', 'Password', 'MustChangePassword', 'Name', 'Role', 'Department',
   'EmploymentType', 'WorkMode', 'Status',
   'ReportingManager', 'ReportingManagerEmail',
   'Manager', 'ManagerEmail',
@@ -22,6 +22,12 @@ const ABSENCE_HEADERS = [
   'Employment Type', 'Status'
 ];
 
+const MISSING_LOGIN_ALERT_HEADERS = [
+  'Date', 'Employee ID', 'Email', 'Name', 'Department', 'Role',
+  'Reporting Manager', 'Manager', 'Project', 'Work Mode',
+  'Employment Type', 'Status', 'Consecutive Missing Days', 'Last Present Date', 'Alert Message', 'RecordedOn'
+];
+
 const MANAGER_HEADERS = [
   'ManagerID', 'ManagerType', 'Name', 'Email', 'Role', 'Department', 'AddedOn'
 ];
@@ -37,6 +43,15 @@ const LEAVE_HEADERS = [
   'RejectedBy', 'RejectedDate', 'RejectionReason',
   'ReportingManager', 'ReportingManagerEmail', 'Manager', 'ManagerEmail'
 ];
+
+const WORK_DONE_HEADERS = [
+  'LogID', 'EmpID', 'Email', 'Name', 'Role', 'Department', 'CurrentProject',
+  'ShowName', 'Episode', 'TotalImagesDone', 'TotalAnimationShotsDone',
+  'WorkTypes', 'LogDateTime', 'SubmittedAt', 'AllowedWindow', 'Source'
+];
+
+const ABSENT_CAPTURE_HOUR = 18;
+const ABSENT_CAPTURE_MINUTE = 30;
 
 function doGet(e) {
   try {
@@ -81,6 +96,10 @@ function jsonResponse(obj) {
     .setMimeType(ContentService.MimeType.JSON);
 }
 
+function openSpreadsheet() {
+  return SpreadsheetApp.openById(SHEET_ID);
+}
+
 function handleAction(action, data) {
   switch (action) {
     case 'ping':              return { success: true, message: 'pong' };
@@ -94,10 +113,13 @@ function handleAction(action, data) {
     case 'deleteHRProfile':   return deleteHRProfile(data.username);
     case 'getEmployee':       return getEmployee(data.email);
     case 'getEmployeeById':   return getEmployeeById(data.empId || data.id || data.employeeId);
+    case 'getEmployeeEmail':  return getEmployeeEmail(data.empId || data.id || data.employeeId);
     case 'getEmployees':      return getEmployees();
+    case 'getAllEmployees':   return getEmployees();
     case 'getEmployeesDirectory': return getEmployeesDirectory();
     case 'addEmployee':       return addEmployee(data);
     case 'updateEmployee':    return updateEmployee(data);
+    case 'resetEmployeePassword': return resetEmployeePassword(data);
     case 'deleteEmployee':    return deleteEmployee(data.email);
     case 'markAttendance':    return handleMarkAttendance(data);
     case 'recordAbsent':      return handleRecordAbsent(data);
@@ -117,6 +139,9 @@ function handleAction(action, data) {
     case 'getManagers':       return getManagers();
     case 'validateManagerProfile': return validateManagerProfile(data.email, data.role);
     case 'getContractAlerts': return getContractAlerts(data.email, data.role);
+    case 'getMissingLoginAlerts': return getMissingLoginAlerts(data);
+    case 'submitWorkDoneLog': return submitWorkDoneLog(data);
+    case 'getWorkDoneLogs':   return getWorkDoneLogs(data);
     case 'validateProductivityTrackerProfile':
     case 'validateProductionManagerProfile': return validateProductivityTrackerProfile(data.email);
     case 'debugManagerProfile': return debugManagerProfile(data.email);
@@ -138,10 +163,12 @@ function setupSheets() {
     'Managers': MANAGER_HEADERS,
     'HRProfiles': HR_PROFILE_HEADERS,
     'Absences': ABSENCE_HEADERS,
+    'WorkDoneLogs': WORK_DONE_HEADERS,
     'AbsentUsers': [
       'Date', 'EmpID', 'Email', 'Name', 'Department',
       'Status', 'RecordedOn'
-    ]
+    ],
+    'MissingLoginAlerts': MISSING_LOGIN_ALERT_HEADERS
   };
 
   for (const [name, headers] of Object.entries(configs)) {
@@ -160,18 +187,14 @@ function setupSheets() {
   ensureManagerSchema(ss);
   ensureLeaveSchema(ss);
   ensureAbsenceSchema(ss);
+  ensureWorkDoneSchema(ss);
+  ensureMissingLoginAlertsSchema(ss);
   ensureDailyAbsentTrigger();
   ensureContractAlertTrigger();
   return { success: true, message: 'All sheets ready and daily absent capture is enabled!' };
 }
 
 function ensureDailyAbsentTrigger() {
-  const existing = ScriptApp.getProjectTriggers().some(function(trigger) {
-    return trigger.getHandlerFunction() === 'recordAbsentEmployees';
-  });
-  if (existing) {
-    return { success: true, message: 'Daily absent trigger already exists' };
-  }
   return setupDailyAbsentTrigger();
 }
 
@@ -192,171 +215,148 @@ function ensureContractAlertTrigger() {
   return { success: true, message: 'Daily contract alert trigger created' };
 }
 
-function styleHeaderRow(sheet, headerCount) {
+function styleHeaderRow(sheet, headerCount, backgroundColor) {
   sheet.getRange(1, 1, 1, headerCount)
-    .setBackground('#1a1a2e')
+    .setBackground(backgroundColor || '#1a1a2e')
     .setFontColor('#ffffff')
     .setFontWeight('bold');
+}
+
+function styleHeaderCell(sheet, column, backgroundColor) {
+  sheet.getRange(1, column)
+    .setBackground(backgroundColor || '#1a1a2e')
+    .setFontColor('#ffffff')
+    .setFontWeight('bold');
+}
+
+function getHeaderMap(sheet, removeSpaces) {
+  const raw = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  const map = {};
+  raw.forEach(function(h, i) {
+    if (!h) return;
+    let key = h.toString().toLowerCase().trim();
+    if (removeSpaces) key = key.replace(/\s+/g, '');
+    map[key] = i;
+  });
+  return map;
+}
+
+function ensureSheetSchema(ss, sheetName, headers, options) {
+  options = options || {};
+  let sheet = ss.getSheetByName(sheetName);
+  if (!sheet) {
+    if (!options.createIfMissing) return null;
+    sheet = ss.insertSheet(sheetName);
+  }
+
+  if (sheet.getLastRow() === 0) {
+    sheet.appendRow(headers);
+    styleHeaderRow(sheet, headers.length, options.headerColor);
+    sheet.setFrozenRows(1);
+    return sheet;
+  }
+
+  const existingMap = getHeaderMap(sheet, false);
+  headers.forEach(function(header) {
+    const key = header.toLowerCase().trim();
+    if (!Object.prototype.hasOwnProperty.call(existingMap, key)) {
+      const col = sheet.getLastColumn() + 1;
+      sheet.getRange(1, col).setValue(header);
+      styleHeaderCell(sheet, col, options.headerColor);
+    }
+  });
+
+  if (options.restyleAllHeaders) {
+    styleHeaderRow(sheet, Math.max(sheet.getLastColumn(), headers.length), options.headerColor);
+  }
+
+  return sheet;
 }
 
 function ensureEmployeeSchema(ss) {
-  const sheet = ss.getSheetByName('Employees');
-  if (!sheet) return;
+  const sheet = ensureSheetSchema(ss, 'Employees', EMPLOYEE_HEADERS, { createIfMissing: true });
+  migrateEmployeePasswordColumn(sheet);
+  backfillEmployeePasswordsOnce(sheet);
+}
 
-  if (sheet.getLastRow() === 0) {
-    sheet.appendRow(EMPLOYEE_HEADERS);
-    styleHeaderRow(sheet, EMPLOYEE_HEADERS.length);
-    sheet.setFrozenRows(1);
-    return;
+function ensureWorkDoneSchema(ss) {
+  ensureSheetSchema(ss, 'WorkDoneLogs', WORK_DONE_HEADERS);
+}
+
+function ensureMissingLoginAlertsSchema(ss) {
+  ensureSheetSchema(ss, 'MissingLoginAlerts', MISSING_LOGIN_ALERT_HEADERS, {
+    createIfMissing: true,
+    headerColor: '#6c757d',
+    restyleAllHeaders: true
+  });
+}
+
+function migrateEmployeePasswordColumn(sheet) {
+  if (!sheet || sheet.getLastColumn() === 0) return;
+  const TARGET_COL = 3;
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  let pwdCol = -1;
+  for (let i = 0; i < headers.length; i++) {
+    const v = headers[i];
+    if (v && v.toString().toLowerCase().trim() === 'password') { pwdCol = i + 1; break; }
   }
+  if (pwdCol === -1) return;
+  if (pwdCol !== TARGET_COL) {
+    sheet.moveColumns(sheet.getRange(1, pwdCol, sheet.getMaxRows(), 1), TARGET_COL);
+  }
+  sheet.getRange(1, TARGET_COL)
+    .setBackground('#7c2d12')
+    .setFontColor('#fde68a')
+    .setFontWeight('bold');
+  if (sheet.getLastRow() > 1) {
+    sheet.getRange(2, TARGET_COL, sheet.getLastRow() - 1, 1).setBackground('#fffbeb');
+  }
+}
 
-  const existingHeaders = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-  const existingMap = {};
-  existingHeaders.forEach(function(h, i) {
-    if (h) existingMap[h.toString().toLowerCase().trim()] = i + 1;
-  });
-
-  EMPLOYEE_HEADERS.forEach(function(header) {
-    const key = header.toLowerCase().trim();
-    if (!Object.prototype.hasOwnProperty.call(existingMap, key)) {
-      const col = sheet.getLastColumn() + 1;
-      sheet.getRange(1, col).setValue(header);
-      sheet.getRange(1, col)
-        .setBackground('#1a1a2e')
-        .setFontColor('#ffffff')
-        .setFontWeight('bold');
-    }
-  });
+function backfillEmployeePasswordsOnce(sheet) {
+  const FLAG = 'EMP_PWD_BACKFILLED_V1';
+  const props = PropertiesService.getScriptProperties();
+  if (props.getProperty(FLAG) === '1') return;
+  if (!sheet || sheet.getLastRow() < 2) { props.setProperty(FLAG, '1'); return; }
+  const hdr = getEmpHeaders(sheet);
+  if (hdr['password'] === undefined || hdr['email'] === undefined) return;
+  const lastRow = sheet.getLastRow();
+  const lastCol = sheet.getLastColumn();
+  const values = sheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
+  const pwdSheetCol = hdr['password'] + 1;
+  let filled = 0;
+  for (let i = 0; i < values.length; i++) {
+    const existing = (values[i][hdr['password']] || '').toString().trim();
+    if (existing) continue;
+    const email = (values[i][hdr['email']] || '').toString();
+    if (!email) continue;
+    const phone = hdr['phone'] !== undefined ? (values[i][hdr['phone']] || '').toString() : '';
+    const pwd = generateEmployeePassword(email, phone);
+    sheet.getRange(i + 2, pwdSheetCol).setValue(pwd);
+    filled++;
+  }
+  props.setProperty(FLAG, '1');
+  if (filled > 0) Logger.log('Backfilled passwords for ' + filled + ' employee(s).');
 }
 
 function ensureManagerSchema(ss) {
-  const sheet = ss.getSheetByName('Managers');
-  if (!sheet) return;
-
-  if (sheet.getLastRow() === 0) {
-    sheet.appendRow(MANAGER_HEADERS);
-    styleHeaderRow(sheet, MANAGER_HEADERS.length);
-    sheet.setFrozenRows(1);
-    return;
-  }
-
-  const existingHeaders = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-  const existingMap = {};
-  existingHeaders.forEach(function(h, i) {
-    if (h) existingMap[h.toString().toLowerCase().trim()] = i + 1;
-  });
-
-  MANAGER_HEADERS.forEach(function(header) {
-    const key = header.toLowerCase().trim();
-    if (!Object.prototype.hasOwnProperty.call(existingMap, key)) {
-      const col = sheet.getLastColumn() + 1;
-      sheet.getRange(1, col).setValue(header);
-      sheet.getRange(1, col)
-        .setBackground('#1a1a2e')
-        .setFontColor('#ffffff')
-        .setFontWeight('bold');
-    }
-  });
+  ensureSheetSchema(ss, 'Managers', MANAGER_HEADERS);
 }
 
 function ensureLeaveSchema(ss) {
-  const sheet = ss.getSheetByName('Leaves');
-  if (!sheet) return;
-
-  if (sheet.getLastRow() === 0) {
-    sheet.appendRow(LEAVE_HEADERS);
-    styleHeaderRow(sheet, LEAVE_HEADERS.length);
-    sheet.setFrozenRows(1);
-    return;
-  }
-
-  const existingHeaders = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-  const existingMap = {};
-  existingHeaders.forEach(function(h, i) {
-    if (h) existingMap[h.toString().toLowerCase().trim()] = i + 1;
-  });
-
-  LEAVE_HEADERS.forEach(function(header) {
-    const key = header.toLowerCase().trim();
-    if (!Object.prototype.hasOwnProperty.call(existingMap, key)) {
-      const col = sheet.getLastColumn() + 1;
-      sheet.getRange(1, col).setValue(header);
-      sheet.getRange(1, col)
-        .setBackground('#1a1a2e')
-        .setFontColor('#ffffff')
-        .setFontWeight('bold');
-    }
-  });
+  ensureSheetSchema(ss, 'Leaves', LEAVE_HEADERS);
 }
 
 function ensureAttendanceSchema(ss) {
-  const sheet = ss.getSheetByName('Attendance');
-  if (!sheet) return;
-
-  if (sheet.getLastRow() === 0) {
-    sheet.appendRow(ATTENDANCE_HEADERS);
-    styleHeaderRow(sheet, ATTENDANCE_HEADERS.length);
-    sheet.setFrozenRows(1);
-    return;
-  }
-
-  const existingHeaders = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-  const existingMap = {};
-  existingHeaders.forEach(function(h, i) {
-    if (h) existingMap[h.toString().toLowerCase().trim()] = i + 1;
-  });
-
-  ATTENDANCE_HEADERS.forEach(function(header) {
-    const key = header.toLowerCase().trim();
-    if (!Object.prototype.hasOwnProperty.call(existingMap, key)) {
-      const col = sheet.getLastColumn() + 1;
-      sheet.getRange(1, col).setValue(header);
-      sheet.getRange(1, col)
-        .setBackground('#1a1a2e')
-        .setFontColor('#ffffff')
-        .setFontWeight('bold');
-    }
-  });
+  ensureSheetSchema(ss, 'Attendance', ATTENDANCE_HEADERS);
 }
 
 function ensureAbsenceSchema(ss) {
-  let sheet = ss.getSheetByName('Absences');
-  if (!sheet) {
-    sheet = ss.insertSheet('Absences');
-  }
-
-  if (sheet.getLastRow() === 0) {
-    sheet.appendRow(ABSENCE_HEADERS);
-    sheet.getRange(1, 1, 1, ABSENCE_HEADERS.length)
-      .setBackground('#6c757d')
-      .setFontColor('#ffffff')
-      .setFontWeight('bold');
-    sheet.setFrozenRows(1);
-    return;
-  }
-
-  const existingHeaders = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-  const existingMap = {};
-  existingHeaders.forEach(function(h, i) {
-    if (h) existingMap[h.toString().toLowerCase().trim()] = i + 1;
+  ensureSheetSchema(ss, 'Absences', ABSENCE_HEADERS, {
+    createIfMissing: true,
+    headerColor: '#6c757d',
+    restyleAllHeaders: true
   });
-
-  ABSENCE_HEADERS.forEach(function(header) {
-    const key = header.toLowerCase().trim();
-    if (!Object.prototype.hasOwnProperty.call(existingMap, key)) {
-      const col = sheet.getLastColumn() + 1;
-      sheet.getRange(1, col).setValue(header);
-      sheet.getRange(1, col)
-        .setBackground('#6c757d')
-        .setFontColor('#ffffff')
-        .setFontWeight('bold');
-    }
-  });
-
-  sheet.getRange(1, 1, 1, Math.max(sheet.getLastColumn(), ABSENCE_HEADERS.length))
-    .setBackground('#6c757d')
-    .setFontColor('#ffffff')
-    .setFontWeight('bold');
 }
 
 function adminLogin(data) {
@@ -412,14 +412,21 @@ function adminLogin(data) {
 }
 
 function employeeLogin(data) {
+  const email = normalizeEmail(data.email || '').toString().trim();
   const empId = (data.empId || data.id || data.employeeId || '').toString().trim().toUpperCase();
   const password = (data.password || '').toString();
-  if (!empId) return { success: false, message: 'Employee ID is required' };
+  if (!email && !empId) return { success: false, message: 'Email or Employee ID is required' };
   if (!password) return { success: false, message: 'Password is required' };
 
-  const employeeLookup = getEmployeeById(empId);
-  if (!employeeLookup || !employeeLookup.success || !employeeLookup.employee || !employeeLookup.employee.id) {
-    return { success: false, message: 'Employee ID not found. Please contact HR.' };
+  let employeeLookup = null;
+  if (email) {
+    employeeLookup = getEmployee(email);
+  } else {
+    employeeLookup = getEmployeeById(empId);
+  }
+
+  if (!employeeLookup || !employeeLookup.success || !employeeLookup.employee || !employeeLookup.employee.email) {
+    return { success: false, message: 'Employee not found. Please contact HR.' };
   }
 
   const existingEmployee = employeeLookup.employee;
@@ -432,12 +439,15 @@ function employeeLogin(data) {
 
   const hdr = getEmpHeaders(sheet);
   const lastRow = sheet.getLastRow();
-  if (lastRow < 2) return { success: false, message: 'Employee ID not found. Please contact HR.' };
+  if (lastRow < 2) return { success: false, message: 'Employee not found. Please contact HR.' };
 
   const rows = sheet.getRange(2, 1, lastRow - 1, sheet.getLastColumn()).getValues();
+  const targetEmail = email ? normalizeEmail(email) : '';
+
   for (let i = 0; i < rows.length; i++) {
+    const rowEmail = normalizeEmail(getValueByHeader(rows[i], hdr, 'email', 1));
     const rowId = (getValueByHeader(rows[i], hdr, 'empid', 0) || '').toString().trim().toUpperCase();
-    if (rowId === empId) {
+    if ((email && rowEmail === targetEmail) || (!email && rowId === empId)) {
       const storedPass = (getValueByHeader(rows[i], hdr, 'password', 2) || '').toString().trim();
       if (storedPass && storedPass !== password) {
         return { success: false, message: 'Incorrect password. Please try again.' };
@@ -446,52 +456,31 @@ function employeeLogin(data) {
     }
   }
 
-  return { success: false, message: 'Employee ID not found. Please contact HR.' };
+  return { success: false, message: 'Employee not found. Please contact HR.' };
 }
 
 function getEmpHeaders(sheet) {
-  const raw = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-  const map = {};
-  raw.forEach(function(h, i) {
-    if (h) map[h.toString().toLowerCase().trim()] = i;
-  });
-  return map;
+  return getHeaderMap(sheet, false);
 }
 
 function getAttHeaders(sheet) {
-  const raw = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-  const map = {};
-  raw.forEach(function(h, i) {
-    if (h) map[h.toString().toLowerCase().replace(/\s/g, '')] = i;
-  });
-  return map;
+  return getHeaderMap(sheet, true);
 }
 
 function getManagerHeaders(sheet) {
-  const raw = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-  const map = {};
-  raw.forEach(function(h, i) {
-    if (h) map[h.toString().toLowerCase().trim()] = i;
-  });
-  return map;
+  return getHeaderMap(sheet, false);
 }
 
 function getHRHeaders(sheet) {
-  const raw = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-  const map = {};
-  raw.forEach(function(h, i) {
-    if (h) map[h.toString().toLowerCase().trim()] = i;
-  });
-  return map;
+  return getHeaderMap(sheet, false);
 }
 
 function getLeaveHeaders(sheet) {
-  const raw = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-  const map = {};
-  raw.forEach(function(h, i) {
-    if (h) map[h.toString().toLowerCase().trim()] = i;
-  });
-  return map;
+  return getHeaderMap(sheet, false);
+}
+
+function getHeaders(sheet) {
+  return getHeaderMap(sheet, true);
 }
 
 function normalizeEmail(email) {
@@ -538,16 +527,29 @@ function generateEmployeePassword(email, phone) {
   return password;
 }
 
+function normalizeRoleKey(value) {
+  return (value || '')
+    .toString()
+    .trim()
+    .toLowerCase()
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s+/g, ' ');
+}
+
 function isProductivityTrackerLabel(value) {
-  const normalized = (value || '').toString().trim().toLowerCase();
-  return normalized === PRODUCTIVITY_TRACKER_LABEL.toLowerCase() ||
-    normalized === LEGACY_PRODUCTIVITY_TRACKER_LABEL.toLowerCase();
+  const normalized = normalizeRoleKey(value);
+  return normalized === normalizeRoleKey(PRODUCTIVITY_TRACKER_LABEL) ||
+    normalized === normalizeRoleKey(LEGACY_PRODUCTIVITY_TRACKER_LABEL) ||
+    normalized === 'productivitytracker' ||
+    normalized === 'productionmanager';
 }
 
 function hasProductivityTrackerRole(value) {
-  const normalized = (value || '').toString().trim().toLowerCase();
-  return normalized.indexOf(PRODUCTIVITY_TRACKER_LABEL.toLowerCase()) !== -1 ||
-    normalized.indexOf(LEGACY_PRODUCTIVITY_TRACKER_LABEL.toLowerCase()) !== -1;
+  const normalized = normalizeRoleKey(value);
+  return normalized.indexOf(normalizeRoleKey(PRODUCTIVITY_TRACKER_LABEL)) !== -1 ||
+    normalized.indexOf(normalizeRoleKey(LEGACY_PRODUCTIVITY_TRACKER_LABEL)) !== -1 ||
+    normalized.indexOf('productivitytracker') !== -1 ||
+    normalized.indexOf('productionmanager') !== -1;
 }
 
 function normalizeProductivityTrackerLabel(value) {
@@ -624,6 +626,18 @@ function formatSheetDate(value) {
   }
 }
 
+function getRollingDateSet(referenceDate, days) {
+  const tz = Session.getScriptTimeZone();
+  const ref = new Date(referenceDate);
+  const dates = new Set();
+  for (let i = 0; i < days; i++) {
+    const d = new Date(ref);
+    d.setDate(d.getDate() - i);
+    dates.add(Utilities.formatDate(d, tz, 'yyyy-MM-dd'));
+  }
+  return dates;
+}
+
 function getValueByHeader(row, hdr, key, fallbackIndex) {
   const index = hdr[key] !== undefined ? hdr[key] : fallbackIndex;
   if (index === -1 || index === undefined) return '';
@@ -686,19 +700,6 @@ function getAttendanceColorInfo(dateValue) {
   };
 }
 
-function getAttendanceColorFromRecordedValue(attendanceColor, checkInValue) {
-  const normalized = (attendanceColor || '').toString().trim().toLowerCase();
-  if (normalized === 'green' || normalized === 'yellow' || normalized === 'red') {
-    return normalized;
-  }
-
-  const hour = parseTimeTo24Hour(checkInValue);
-  if (hour === null) return 'green';
-  if (hour < 17) return 'green';
-  if (hour < 19) return 'yellow';
-  return 'red';
-}
-
 function applyAttendanceRowStyle(sheet, rowNumber, columnCount, colorInfo, timeColumnIndex) {
   if (!sheet || !colorInfo) return;
   sheet.getRange(rowNumber, 1, 1, columnCount).setBackground(colorInfo.rowBackground);
@@ -710,13 +711,14 @@ function applyAttendanceRowStyle(sheet, rowNumber, columnCount, colorInfo, timeC
   }
 }
 
-function buildEmployeeObject(row, hdr) {
+function buildEmployeeObject(row, hdr, options) {
+  options = options || {};
   const employmentType = getValueByHeader(row, hdr, 'employmenttype', -1) ||
     getValueByHeader(row, hdr, 'type', -1) ||
     'Permanent';
   const role = normalizeProductivityTrackerLabel(row[hdr['role']] || '');
 
-  return {
+  const employee = {
     id: row[hdr['empid']] || '',
     email: row[hdr['email']] || '',
     name: row[hdr['name']] || '',
@@ -738,8 +740,15 @@ function buildEmployeeObject(row, hdr) {
     contractTotalDays: getValueByHeader(row, hdr, 'contracttotaldays', -1),
     noticePeriod: getValueByHeader(row, hdr, 'noticeperiod', -1),
     renewalNotes: getValueByHeader(row, hdr, 'renewalnotes', -1),
-    currentProject: getValueByHeader(row, hdr, 'currentproject', -1)
+    currentProject: getValueByHeader(row, hdr, 'currentproject', -1),
+    mustChangePassword: String(getValueByHeader(row, hdr, 'mustchangepassword', -1) || '').toString().toUpperCase() === 'TRUE'
   };
+
+  if (options.includePassword) {
+    employee.password = getValueByHeader(row, hdr, 'password', -1) || '';
+  }
+
+  return employee;
 }
 
 function buildManagerObject(row, hdr) {
@@ -757,8 +766,9 @@ function buildManagerObject(row, hdr) {
 }
 
 function normalizeManagerTypeForMatch(value) {
-  const normalized = normalizeProductivityTrackerLabel(value).toString().trim().toLowerCase();
+  const normalized = normalizeRoleKey(normalizeProductivityTrackerLabel(value));
   if (normalized === 'reporting') return 'reporting manager';
+  if (normalized === 'reportingmanager') return 'reporting manager';
   if (normalized === 'manager') return 'manager';
   return normalized;
 }
@@ -865,40 +875,6 @@ function getEmployeeForLeaveNotification(leaveRecord) {
   return employee;
 }
 
-function buildAttendanceObject(row, hdr) {
-  const rawCheckIn = getValueByHeader(row, hdr, 'checkintime', 7);
-  let checkInStr = '';
-  if (rawCheckIn) {
-    try {
-      if (rawCheckIn instanceof Date) {
-        checkInStr = Utilities.formatDate(rawCheckIn, Session.getScriptTimeZone(), 'hh:mm a');
-      } else {
-        const d = new Date(rawCheckIn);
-        if (!isNaN(d.getTime())) {
-          checkInStr = Utilities.formatDate(d, Session.getScriptTimeZone(), 'hh:mm a');
-        } else {
-          checkInStr = String(rawCheckIn);
-        }
-      }
-    } catch(e) {
-      checkInStr = String(rawCheckIn);
-    }
-  }
-  return {
-    recordId: getValueByHeader(row, hdr, 'recordid', 0),
-    empId: getValueByHeader(row, hdr, 'empid', 1),
-    email: getValueByHeader(row, hdr, 'email', 2),
-    name: getValueByHeader(row, hdr, 'name', 3),
-    department: getValueByHeader(row, hdr, 'department', 4),
-    currentProject: getValueByHeader(row, hdr, 'currentproject', 5),
-    date: formatSheetDate(getValueByHeader(row, hdr, 'date', 6)),
-    checkIn: checkInStr,
-    location: getValueByHeader(row, hdr, 'location', 8),
-    status: getValueByHeader(row, hdr, 'status', 9),
-    attendanceColor: getValueByHeader(row, hdr, 'attendancecolor', -1)
-  };
-}
-
 function getEmployee(email) {
   if (!email) return { success: false, message: 'Email is required' };
 
@@ -922,6 +898,32 @@ function getEmployee(email) {
   }
 
   return { success: false, message: 'Employee not found. Please contact your admin.' };
+}
+
+function getEmployeeEmail(empId) {
+  if (!empId) return { success: false, message: 'Employee ID is required' };
+  
+  const ss = SpreadsheetApp.openById(SHEET_ID);
+  ensureEmployeeSchema(ss);
+  const sheet = ss.getSheetByName('Employees');
+  if (!sheet) return { success: false, message: 'Employees sheet not found.' };
+  
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return { success: false, message: 'No employees found.' };
+  
+  const rows = sheet.getRange(2, 1, lastRow - 1, sheet.getLastColumn()).getValues();
+  const hdr = getEmpHeaders(sheet);
+  const wantedId = String(empId).trim().toLowerCase();
+  
+  for (let i = 0; i < rows.length; i++) {
+    const rowId = String(getValueByHeader(rows[i], hdr, 'empid', 0) || '').trim().toLowerCase();
+    if (rowId === wantedId) {
+      const employeeEmail = getValueByHeader(rows[i], hdr, 'email', 1);
+      return { success: true, email: employeeEmail };
+    }
+  }
+  
+  return { success: false, message: 'Employee not found.' };
 }
 
 function getEmployeeById(empId) {
@@ -963,7 +965,7 @@ function getEmployees() {
 
   for (let i = 0; i < rows.length; i++) {
     if (rows[i][hdr['empid']] || rows[i][hdr['email']]) {
-      employees.push(buildEmployeeObject(rows[i], hdr));
+      employees.push(buildEmployeeObject(rows[i], hdr, { includePassword: true }));
     }
   }
 
@@ -1073,6 +1075,7 @@ function addEmployee(data) {
     const generatedPassword = generateEmployeePassword(email, data.phone || '');
     if (hdr['phone'] !== undefined) newRow[hdr['phone']] = data.phone || '';
     if (hdr['password'] !== undefined) newRow[hdr['password']] = generatedPassword;
+    if (hdr['mustchangepassword'] !== undefined) newRow[hdr['mustchangepassword']] = 'TRUE';
     if (hdr['joindate'] !== undefined) newRow[hdr['joindate']] = data.joinDate || '';
     if (hdr['contractenddate'] !== undefined) newRow[hdr['contractenddate']] = data.contractEndDate || '';
     if (hdr['contracttotaldays'] !== undefined) newRow[hdr['contracttotaldays']] = data.contractTotalDays || '';
@@ -1138,7 +1141,16 @@ function updateEmployee(data) {
         const r = i + 2;
 
         if (hasField(data, 'name'))                 setCellIfProvided(sheet, r, hdr, 'name', data.name);
-        if (hasField(data, 'password'))             setCellIfProvided(sheet, r, hdr, 'password', data.password);
+        if (hasField(data, 'password')) {
+          setCellIfProvided(sheet, r, hdr, 'password', data.password);
+          if (hdr['mustchangepassword'] !== undefined && !hasField(data, 'mustChangePassword')) {
+            sheet.getRange(r, hdr['mustchangepassword'] + 1).setValue('FALSE');
+          }
+        }
+        if (hasField(data, 'mustChangePassword')) {
+          const flag = (data.mustChangePassword === true || String(data.mustChangePassword).toUpperCase() === 'TRUE') ? 'TRUE' : 'FALSE';
+          if (hdr['mustchangepassword'] !== undefined) sheet.getRange(r, hdr['mustchangepassword'] + 1).setValue(flag);
+        }
         if (hasField(data, 'role'))                 setCellIfProvided(sheet, r, hdr, 'role', data.role);
         if (hasField(data, 'department'))           setCellIfProvided(sheet, r, hdr, 'department', data.department);
         if (hasField(data, 'employmentType') || hasField(data, 'employeeType') || hasField(data, 'employment_type') || hasField(data, 'type')) {
@@ -1175,6 +1187,74 @@ function updateEmployee(data) {
   } catch (err) {
     Logger.log('Error in updateEmployee: ' + err.toString());
     return { success: false, message: 'Error updating employee: ' + err.toString() };
+  }
+}
+
+function resetEmployeePassword(data) {
+  try {
+    const email = normalizeEmail(data && data.email);
+    if (!email) return { success: false, message: 'Email is required' };
+    const ss = SpreadsheetApp.openById(SHEET_ID);
+    ensureEmployeeSchema(ss);
+    const sheet = ss.getSheetByName('Employees');
+    if (!sheet || sheet.getLastRow() < 2) return { success: false, message: 'No employees found' };
+    const hdr = getEmpHeaders(sheet);
+    const lastRow = sheet.getLastRow();
+    const lastCol = sheet.getLastColumn();
+    const values = sheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
+    const emailIdx = hdr['email'] !== undefined ? hdr['email'] : 1;
+    let foundRow = -1;
+    let employeeName = '';
+    let phone = '';
+    for (let i = 0; i < values.length; i++) {
+      if (normalizeEmail(values[i][emailIdx]) === email) {
+        foundRow = i + 2;
+        if (hdr['name'] !== undefined) employeeName = (values[i][hdr['name']] || '').toString();
+        if (hdr['phone'] !== undefined) phone = (values[i][hdr['phone']] || '').toString();
+        break;
+      }
+    }
+    if (foundRow === -1) return { success: false, message: 'No employee found with that email' };
+    if (hdr['password'] === undefined) return { success: false, message: 'Password column missing in sheet' };
+    const newPassword = generateEmployeePassword(email, phone);
+    sheet.getRange(foundRow, hdr['password'] + 1).setValue(newPassword);
+    if (hdr['mustchangepassword'] !== undefined) {
+      sheet.getRange(foundRow, hdr['mustchangepassword'] + 1).setValue('TRUE');
+    }
+    SpreadsheetApp.flush();
+    let emailed = false;
+    try {
+      MailApp.sendEmail({
+        to: email,
+        subject: 'AttendPro — Your password has been reset',
+        htmlBody: '<div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;padding:24px;background:#0f172a;color:#f1f5f9;border-radius:12px;">'
+          + '<h2 style="color:#f0abfc;margin:0 0 8px;">AttendPro · Password Reset</h2>'
+          + '<p style="color:#cbd5e1;">Hi ' + (employeeName || 'there') + ',</p>'
+          + '<p style="color:#cbd5e1;">Your AttendPro password has been reset. Use the credentials below to sign in:</p>'
+          + '<div style="background:#1e293b;padding:16px 20px;border-radius:10px;margin:16px 0;">'
+          + '<div style="color:#94a3b8;font-size:13px;">Email</div>'
+          + '<div style="color:#fde68a;font-weight:600;margin-bottom:10px;">' + email + '</div>'
+          + '<div style="color:#94a3b8;font-size:13px;">New Password</div>'
+          + '<div style="color:#fde68a;font-weight:700;font-size:18px;letter-spacing:2px;">' + newPassword + '</div>'
+          + '</div>'
+          + '<p style="color:#94a3b8;font-size:13px;">Please sign in and change your password from the profile menu.</p>'
+          + '</div>'
+      });
+      emailed = true;
+    } catch (mailErr) {
+      Logger.log('MailApp.sendEmail failed: ' + mailErr.toString());
+    }
+    return {
+      success: true,
+      message: emailed
+        ? 'A new password has been emailed to you.'
+        : 'Password reset. Email could not be sent — please contact HR for the new password.',
+      emailed: emailed,
+      employeeName: employeeName
+    };
+  } catch (err) {
+    Logger.log('Error in resetEmployeePassword: ' + err.toString());
+    return { success: false, message: 'Reset failed: ' + err.toString() };
   }
 }
 
@@ -1539,8 +1619,8 @@ function validateProductivityTrackerProfile(email) {
       const rowEmail = normalizeEmail(getValueByHeader(rows[i], hdr, 'email', 3));
       if (rowEmail !== normalizedEmail) continue;
 
-      const managerType = (getValueByHeader(rows[i], hdr, 'managertype', 1) || '').toString().trim().toLowerCase();
-      const roleVal = (getValueByHeader(rows[i], hdr, 'role', 4) || '').toString().trim().toLowerCase();
+      const managerType = normalizeManagerTypeForMatch(getValueByHeader(rows[i], hdr, 'managertype', 1) || '');
+      const roleVal = normalizeRoleKey(getValueByHeader(rows[i], hdr, 'role', 4) || '');
       const nameVal = (getValueByHeader(rows[i], hdr, 'name', 2) || '').toString().trim();
       const isProductivityTracker =
         isProductivityTrackerLabel(managerType) ||
@@ -1596,12 +1676,205 @@ function findProductivityTrackerEmployeeProfile(ss, email) {
     const rowEmail = normalizeEmail(getValueByHeader(rows[i], hdr, 'email', 1));
     if (rowEmail !== email) continue;
 
-    const roleVal = (getValueByHeader(rows[i], hdr, 'role', 3) || '').toString().trim().toLowerCase();
+    const roleVal = normalizeRoleKey(getValueByHeader(rows[i], hdr, 'role', 3) || '');
     if (hasProductivityTrackerRole(roleVal)) {
       return buildEmployeeObject(rows[i], hdr);
     }
   }
   return null;
+}
+
+function normalizeWorkDoneRole(value) {
+  return (value || '')
+    .toString()
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ');
+}
+
+function isAllowedWorkDoneRole(role) {
+  var normalized = normalizeWorkDoneRole(role);
+  if (!normalized) return false;
+  return normalized === 'ai artist intern' ||
+    normalized === 'ai artist' ||
+    normalized === 'animation artist' ||
+    normalized === 'animation artist - intern';
+}
+
+function getWorkDoneAllowedWindow(now, tz) {
+  var hour = parseInt(Utilities.formatDate(now, tz, 'H'), 10);
+  return {
+    allowed: hour >= 18,
+    hour: hour,
+    label: 'After 6:00 PM'
+  };
+}
+
+function parseWorkDoneLogDateTime(value) {
+  if (!value) return null;
+  var text = (value || '').toString().trim();
+  var match = text.match(/^(\d{4})-(\d{2})-(\d{2})\s+(\d{1,2}):(\d{2}):(\d{2})\s*(AM|PM)$/i);
+  if (!match) return null;
+
+  var year = parseInt(match[1], 10);
+  var month = parseInt(match[2], 10) - 1;
+  var day = parseInt(match[3], 10);
+  var hour = parseInt(match[4], 10);
+  var minute = parseInt(match[5], 10);
+  var second = parseInt(match[6], 10);
+  var meridiem = match[7].toUpperCase();
+
+  if (hour === 12) hour = 0;
+  if (meridiem === 'PM') hour += 12;
+
+  return new Date(year, month, day, hour, minute, second);
+}
+
+function getEmployeeProfileByEmail(ss, email) {
+  ensureEmployeeSchema(ss);
+  var sheet = ss.getSheetByName('Employees');
+  if (!sheet || sheet.getLastRow() < 2) return null;
+
+  var hdr = getEmpHeaders(sheet);
+  var rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn()).getValues();
+  var normalizedEmail = normalizeEmail(email);
+  for (var i = 0; i < rows.length; i++) {
+    var rowEmail = normalizeEmail(getValueByHeader(rows[i], hdr, 'email', 1));
+    if (rowEmail === normalizedEmail) {
+      return buildEmployeeObject(rows[i], hdr);
+    }
+  }
+  return null;
+}
+
+function submitWorkDoneLog(data) {
+  var email = normalizeEmail(data.email || data.employeeEmail);
+  var empId = (data.empId || data.employeeId || '').toString().trim();
+  if (!email && !empId) return { success: false, message: 'Email or Employee ID is required.' };
+
+  var ss = SpreadsheetApp.openById(SHEET_ID);
+  ensureWorkDoneSchema(ss);
+  var employee = email ? getEmployeeProfileByEmail(ss, email) : null;
+  if (!employee && empId) employee = getEmployeeById(empId);
+  if (!employee) return { success: false, message: 'Employee profile not found.' };
+  if (!isAllowedWorkDoneRole(employee.role)) {
+    return { success: false, message: 'Only AI Artist and Animation Artist roles can submit work done logs.' };
+  }
+  if (!email) email = normalizeEmail(employee.email || '');
+
+  var tz = Session.getScriptTimeZone();
+  var now = new Date();
+  var localLogDate = parseWorkDoneLogDateTime(data.logDateTime);
+  var accessWindow = getWorkDoneAllowedWindow(localLogDate || now, tz);
+  if (!accessWindow.allowed) {
+    return { success: false, message: 'Work done log submissions open after 6:00 PM only.' };
+  }
+
+  var workTypes = data.workTypes;
+  if (!Array.isArray(workTypes)) {
+    workTypes = String(workTypes || '')
+      .split(',')
+      .map(function(item) { return item.toString().trim(); })
+      .filter(function(item) { return item; });
+  }
+  if (!workTypes.length) return { success: false, message: 'Select at least one work type.' };
+
+  var showName = (data.showName || '').toString().trim();
+  var episode = (data.episode || '').toString().trim();
+  if (!showName || !episode) {
+    return { success: false, message: 'Show name and episode are required.' };
+  }
+
+  var imagesDone = Number(data.totalImagesDone || 0);
+  var shotsDone = Number(data.totalAnimationShotsDone || 0);
+  if (isNaN(imagesDone) || imagesDone < 0 || isNaN(shotsDone) || shotsDone < 0) {
+    return { success: false, message: 'Image and animation shot counts must be valid numbers.' };
+  }
+
+  var sheet = ss.getSheetByName('WorkDoneLogs');
+  var submittedAt = Utilities.formatDate(now, tz, 'yyyy-MM-dd hh:mm:ss a');
+  var logDateTime = (data.logDateTime || submittedAt).toString().trim();
+  var row = [
+    'WDL-' + Utilities.getUuid().slice(0, 8).toUpperCase(),
+    employee.id || '',
+    employee.email || email,
+    data.employeeName || employee.name || '',
+    employee.role || '',
+    employee.department || '',
+    employee.currentProject || '',
+    showName,
+    episode,
+    imagesDone,
+    shotsDone,
+    workTypes.join(', '),
+    logDateTime,
+    submittedAt,
+    accessWindow.label,
+    'work-done-log.html'
+  ];
+
+  var startRow = sheet.getLastRow() + 1;
+  sheet.getRange(startRow, 1, 1, WORK_DONE_HEADERS.length).setValues([row]);
+  sheet.getRange(startRow, 1, 1, WORK_DONE_HEADERS.length).setBackground('#ede9fe');
+
+  return {
+    success: true,
+    message: 'Work done log saved successfully.',
+    log: {
+      logId: row[0],
+      employeeName: row[3],
+      employeeEmail: row[2],
+      role: row[4],
+      showName: row[7],
+      episode: row[8],
+      totalImagesDone: row[9],
+      totalAnimationShotsDone: row[10],
+      workTypes: workTypes,
+      logDateTime: row[12],
+      submittedAt: row[13]
+    }
+  };
+}
+
+function getWorkDoneLogs(data) {
+  var ss = SpreadsheetApp.openById(SHEET_ID);
+  ensureWorkDoneSchema(ss);
+  var sheet = ss.getSheetByName('WorkDoneLogs');
+  if (!sheet || sheet.getLastRow() < 2) return { success: true, logs: [] };
+
+  var hdr = getHeaders(sheet);
+  var rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn()).getValues();
+  var requestedEmail = normalizeEmail(data.email || data.employeeEmail);
+  var logs = [];
+
+  for (var i = rows.length - 1; i >= 0; i--) {
+    var rowEmail = normalizeEmail(getValueByHeader(rows[i], hdr, 'email', 2));
+    if (requestedEmail && rowEmail !== requestedEmail) continue;
+
+    logs.push({
+      logId: getValueByHeader(rows[i], hdr, 'logid', 0),
+      empId: getValueByHeader(rows[i], hdr, 'empid', 1),
+      employeeEmail: getValueByHeader(rows[i], hdr, 'email', 2),
+      employeeName: getValueByHeader(rows[i], hdr, 'name', 3),
+      role: getValueByHeader(rows[i], hdr, 'role', 4),
+      department: getValueByHeader(rows[i], hdr, 'department', 5),
+      currentProject: getValueByHeader(rows[i], hdr, 'currentproject', 6),
+      showName: getValueByHeader(rows[i], hdr, 'showname', 7),
+      episode: getValueByHeader(rows[i], hdr, 'episode', 8),
+      totalImagesDone: getValueByHeader(rows[i], hdr, 'totalimagesdone', 9),
+      totalAnimationShotsDone: getValueByHeader(rows[i], hdr, 'totalanimationshotsdone', 10),
+      workTypes: String(getValueByHeader(rows[i], hdr, 'worktypes', 11) || '')
+        .split(',')
+        .map(function(item) { return item.toString().trim(); })
+        .filter(function(item) { return item; }),
+      logDateTime: getValueByHeader(rows[i], hdr, 'logdatetime', 12),
+      submittedAt: getValueByHeader(rows[i], hdr, 'submittedat', 13)
+    });
+
+    if (logs.length >= 50) break;
+  }
+
+  return { success: true, logs: logs };
 }
 
 function normalizeProjectName(name) {
@@ -2022,10 +2295,6 @@ function handleMarkAttendance(data) {
   }
 }
 
-function markAttendance(data) {
-  return handleMarkAttendance(data);
-}
-
 function checkLoginBeforeCutoff(data) {
   const ss = SpreadsheetApp.openById(SHEET_ID);
   let sheet = ss.getSheetByName('Attendance');
@@ -2068,98 +2337,7 @@ function checkLoginBeforeCutoff(data) {
 }
 
 function captureAbsentUsers(data) {
-  const ss = SpreadsheetApp.openById(SHEET_ID);
-  const empSheet = ss.getSheetByName('Employees');
-  const attSheet = ss.getSheetByName('Attendance');
-  const absentSheet = ss.getSheetByName('AbsentUsers');
-  
-  if (!empSheet || !attSheet || !absentSheet) {
-    return { success: false, message: 'Required sheets not found' };
-  }
-
-  const tz = Session.getScriptTimeZone();
-  const today = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
-  const recordedOn = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd HH:mm:ss');
-  const empLastRow = empSheet.getLastRow();
-  if (empLastRow <= 1) return { success: true, message: 'No employees found', absentCount: 0 };
-  
-  const empRows = empSheet.getRange(2, 1, empLastRow - 1, empSheet.getLastColumn()).getValues();
-  const eHdr = getEmpHeaders(empSheet);
-  const iMail = eHdr['email'] !== undefined ? eHdr['email'] : 1;
-  const iName = eHdr['name'] !== undefined ? eHdr['name'] : 2;
-  const iDept = eHdr['department'] !== undefined ? eHdr['department'] : 4;
-  const iEmpId = eHdr['empid'] !== undefined ? eHdr['empid'] : 0;
-  const attLastRow = attSheet.getLastRow();
-  const attendedEmails = new Set();
-  
-  if (attLastRow > 1) {
-    const attRows = attSheet.getRange(2, 1, attLastRow - 1, attSheet.getLastColumn()).getValues();
-    const aHdr = getAttHeaders(attSheet);
-    const aIMail = aHdr['email'] !== undefined ? aHdr['email'] : 2;
-    const aIDate = aHdr['date'] !== undefined ? aHdr['date'] : 6;
-    
-    for (let i = 0; i < attRows.length; i++) {
-      const rowDate = attRows[i][aIDate] ? attRows[i][aIDate].toString().substring(0, 10) : '';
-      if (rowDate === today) {
-        attendedEmails.add(normalizeEmail(attRows[i][aIMail]));
-      }
-    }
-  }
-  let absentCount = 0;
-  const absHdr = getAttHeaders(absentSheet);
-  const totalAbsentCols = absentSheet.getLastColumn();
-  
-  for (let i = 0; i < empRows.length; i++) {
-    const empEmail = normalizeEmail(empRows[i][iMail]);
-    // Get and parse join date
-    let joinDateStr = '';
-    if (eHdr['joindate'] !== undefined) {
-      joinDateStr = empRows[i][eHdr['joindate']];
-    }
-    let joinDate = null;
-    if (joinDateStr) {
-      // Try to parse joinDateStr as yyyy-MM-dd
-      joinDate = new Date(joinDateStr);
-      if (isNaN(joinDate.getTime())) {
-        // Try alternate parsing if needed
-        joinDate = new Date(joinDateStr.replace(/\//g, '-'));
-      }
-    }
-    // If joinDate is after today, skip absent marking
-    if (joinDate && joinDate > new Date(today)) {
-      continue;
-    }
-    if (!attendedEmails.has(empEmail)) {
-      const absentLastRow = absentSheet.getLastRow();
-      let alreadyRecorded = false;
-      if (absentLastRow > 1) {
-        const absentRows = absentSheet.getRange(2, 1, absentLastRow - 1, absentSheet.getLastColumn()).getValues();
-        const absMailIdx = absHdr['email'] !== undefined ? absHdr['email'] : 2;
-        const absDateIdx = absHdr['date'] !== undefined ? absHdr['date'] : 0;
-        for (let j = 0; j < absentRows.length; j++) {
-          const absDate = absentRows[j][absDateIdx] ? absentRows[j][absDateIdx].toString().substring(0, 10) : '';
-          if (absDate === today && normalizeEmail(absentRows[j][absMailIdx]) === empEmail) {
-            alreadyRecorded = true;
-            break;
-          }
-        }
-      }
-      if (!alreadyRecorded) {
-        const newAbsentRow = new Array(totalAbsentCols).fill('');
-        if (absHdr['date'] !== undefined) newAbsentRow[absHdr['date']] = today;
-        if (absHdr['empid'] !== undefined) newAbsentRow[absHdr['empid']] = empRows[i][iEmpId] || '';
-        if (absHdr['email'] !== undefined) newAbsentRow[absHdr['email']] = empRows[i][iMail] || '';
-        if (absHdr['name'] !== undefined) newAbsentRow[absHdr['name']] = empRows[i][iName] || '';
-        if (absHdr['department'] !== undefined) newAbsentRow[absHdr['department']] = empRows[i][iDept] || '';
-        if (absHdr['status'] !== undefined) newAbsentRow[absHdr['status']] = 'Absent';
-        if (absHdr['recordedon'] !== undefined) newAbsentRow[absHdr['recordedon']] = recordedOn;
-        absentSheet.appendRow(newAbsentRow);
-        absentCount++;
-      }
-    }
-  }
-  
-  return { success: true, message: 'Absent users captured', absentCount: absentCount };
+  return recordAbsentEmployees();
 }
 
 function handleRecordAbsent(data) {
@@ -2189,6 +2367,10 @@ function recordAbsentEmployees() {
     const eHdr = getEmpHeaders(empSheet);
 
     const presentEmails = new Set();
+    const lastPresentByEmail = {};
+    const recentAbsenceCounts = {};
+    const rollingWindowDates = getRollingDateSet(today, 5);
+
     if (attSheet && attSheet.getLastRow() > 1) {
       const attRows = attSheet.getRange(2, 1, attSheet.getLastRow() - 1, attSheet.getLastColumn()).getValues();
       const aHdr = getAttHeaders(attSheet);
@@ -2196,8 +2378,14 @@ function recordAbsentEmployees() {
       const attDateIndex = aHdr['date'] !== undefined ? aHdr['date'] : 6;
       for (let i = 0; i < attRows.length; i++) {
         const rowDate = formatSheetDate(attRows[i][attDateIndex]) || String(attRows[i][attDateIndex] || '').substring(0, 10);
+        const email = normalizeEmail(attRows[i][attEmailIndex]);
+        if (!email) continue;
         if (rowDate === today) {
-          presentEmails.add(normalizeEmail(attRows[i][attEmailIndex]));
+          presentEmails.add(email);
+        } else if (rowDate && rowDate < today) {
+          if (!lastPresentByEmail[email] || rowDate > lastPresentByEmail[email]) {
+            lastPresentByEmail[email] = rowDate;
+          }
         }
       }
     }
@@ -2223,8 +2411,13 @@ function recordAbsentEmployees() {
       const existingAbsences = absenceSheet.getRange(2, 1, absenceSheet.getLastRow() - 1, absenceSheet.getLastColumn()).getValues();
       for (let i = 0; i < existingAbsences.length; i++) {
         const rowDate = formatSheetDate(existingAbsences[i][0]) || String(existingAbsences[i][0] || '').substring(0, 10);
+        const email = normalizeEmail(existingAbsences[i][2]);
+        if (!email) continue;
         if (rowDate === today) {
-          alreadyAbsent.add(normalizeEmail(existingAbsences[i][2]));
+          alreadyAbsent.add(email);
+        }
+        if (rollingWindowDates.has(rowDate)) {
+          recentAbsenceCounts[email] = (recentAbsenceCounts[email] || 0) + 1;
         }
       }
     }
@@ -2266,7 +2459,80 @@ function recordAbsentEmployees() {
       absenceSheet.getRange(startRow, 1, absentRows.length, ABSENCE_HEADERS.length).setBackground('#f8d7da');
     }
 
-    return { success: true, recorded: absentRows.length };
+    ensureMissingLoginAlertsSchema(ss);
+    const alertSheet = ss.getSheetByName('MissingLoginAlerts');
+    const existingAlertKeys = new Set();
+    if (alertSheet && alertSheet.getLastRow() > 1) {
+      const alertRows = alertSheet.getRange(2, 1, alertSheet.getLastRow() - 1, alertSheet.getLastColumn()).getValues();
+      const alertHdr = getHeaders(alertSheet);
+      for (let i = 0; i < alertRows.length; i++) {
+        const rowDate = formatSheetDate(getValueByHeader(alertRows[i], alertHdr, 'date', 0)) || '';
+        const email = normalizeEmail(getValueByHeader(alertRows[i], alertHdr, 'email', 2));
+        if (rowDate === today && email) {
+          existingAlertKeys.add(email + '|' + rowDate);
+        }
+      }
+    }
+
+    const todayAbsentEmails = new Set(alreadyAbsent);
+    absentRows.forEach(function(row) {
+      const email = normalizeEmail(row[2]);
+      if (email) todayAbsentEmails.add(email);
+    });
+
+    const alertRows = [];
+    if (alertSheet) {
+      for (let i = 0; i < empRows.length; i++) {
+        const email = normalizeEmail(getValueByHeader(empRows[i], eHdr, 'email', 1));
+        if (!email) continue;
+        if (!todayAbsentEmails.has(email)) continue;
+        if (presentEmails.has(email) || onLeaveEmails.has(email)) continue;
+        const status = (getValueByHeader(empRows[i], eHdr, 'status', -1) || 'Active').toString().trim().toLowerCase();
+        if (status !== 'active') continue;
+        const joinDate = formatSheetDate(getValueByHeader(empRows[i], eHdr, 'joindate', -1));
+        if (joinDate && joinDate > today) continue;
+
+        let missingCount = recentAbsenceCounts[email] || 0;
+        if (!alreadyAbsent.has(email)) {
+          missingCount += 1;
+        }
+
+        if (missingCount >= 5) {
+          const alertKey = email + '|' + today;
+          if (existingAlertKeys.has(alertKey)) continue;
+
+          const employmentType = getValueByHeader(empRows[i], eHdr, 'employmenttype', -1) ||
+            getValueByHeader(empRows[i], eHdr, 'type', -1) || 'Permanent';
+
+          alertRows.push([
+            today,
+            getValueByHeader(empRows[i], eHdr, 'empid', 0),
+            email,
+            getValueByHeader(empRows[i], eHdr, 'name', 2),
+            getValueByHeader(empRows[i], eHdr, 'department', 4),
+            normalizeProductivityTrackerLabel(getValueByHeader(empRows[i], eHdr, 'role', 3)),
+            getValueByHeader(empRows[i], eHdr, 'reportingmanager', -1),
+            getValueByHeader(empRows[i], eHdr, 'manager', -1),
+            getValueByHeader(empRows[i], eHdr, 'currentproject', -1),
+            getValueByHeader(empRows[i], eHdr, 'workmode', -1),
+            employmentType,
+            'Absent',
+            missingCount,
+            lastPresentByEmail[email] || '',
+            'Missing login for 5 or more days',
+            Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd HH:mm:ss')
+          ]);
+        }
+      }
+    }
+
+    if (alertRows.length > 0) {
+      const startRow = alertSheet.getLastRow() + 1;
+      alertSheet.getRange(startRow, 1, alertRows.length, MISSING_LOGIN_ALERT_HEADERS.length).setValues(alertRows);
+      alertSheet.getRange(startRow, 1, alertRows.length, MISSING_LOGIN_ALERT_HEADERS.length).setBackground('#fce8e6');
+    }
+
+    return { success: true, recorded: absentRows.length, missingAlertsCreated: alertRows.length };
   } catch (err) {
     Logger.log('recordAbsentEmployees error: ' + err.toString());
     return { success: false, message: 'Error: ' + err.toString(), error: err.toString() };
@@ -2282,13 +2548,17 @@ function setupDailyAbsentTrigger() {
 
   ScriptApp.newTrigger('recordAbsentEmployees')
     .timeBased()
-    .atHour(23)
-    .nearMinute(59)
+    .atHour(ABSENT_CAPTURE_HOUR)
+    .nearMinute(ABSENT_CAPTURE_MINUTE)
     .everyDays(1)
     .create();
 
   Logger.log('Daily absent recording trigger set up successfully');
-  return { success: true, message: 'Daily absent recording trigger set up successfully' };
+  return {
+    success: true,
+    message: 'Daily absent recording trigger set up successfully',
+    scheduledAt: Utilities.formatString('%02d:%02d', ABSENT_CAPTURE_HOUR, ABSENT_CAPTURE_MINUTE)
+  };
 }
 
 function getAttendance(email) {
@@ -2375,6 +2645,46 @@ function getAllAttendance() {
   return { success: true, attendance: result };
 }
 
+function getMissingLoginAlerts(data) {
+  const ss = SpreadsheetApp.openById(SHEET_ID);
+  ensureMissingLoginAlertsSchema(ss);
+  const sheet = ss.getSheetByName('MissingLoginAlerts');
+  if (!sheet || sheet.getLastRow() < 2) return { success: true, alerts: [] };
+
+  const lastRow = sheet.getLastRow();
+  const rows = sheet.getRange(2, 1, lastRow - 1, sheet.getLastColumn()).getValues();
+  const hdr = getHeaders(sheet);
+  const targetDate = data && data.date ? String(data.date).substring(0, 10) : '';
+  const alerts = [];
+
+  for (let i = 0; i < rows.length; i++) {
+    const rowDate = formatSheetDate(getValueByHeader(rows[i], hdr, 'date', 0)) || '';
+    const email = normalizeEmail(getValueByHeader(rows[i], hdr, 'email', 2));
+    if (!rowDate || !email) continue;
+    if (targetDate && rowDate !== targetDate) continue;
+
+    alerts.push({
+      date: rowDate,
+      empId: getValueByHeader(rows[i], hdr, 'employee id', 1),
+      email: email,
+      name: getValueByHeader(rows[i], hdr, 'name', 3),
+      department: getValueByHeader(rows[i], hdr, 'department', 4),
+      role: getValueByHeader(rows[i], hdr, 'role', 5),
+      reportingManager: getValueByHeader(rows[i], hdr, 'reporting manager', 6),
+      manager: getValueByHeader(rows[i], hdr, 'manager', 7),
+      project: getValueByHeader(rows[i], hdr, 'project', 8),
+      workMode: getValueByHeader(rows[i], hdr, 'work mode', 9),
+      employmentType: getValueByHeader(rows[i], hdr, 'employment type', 10),
+      status: getValueByHeader(rows[i], hdr, 'status', 11),
+      consecutiveMissingDays: parseInt(getValueByHeader(rows[i], hdr, 'consecutive missing days', 12)) || 0,
+      lastPresentDate: getValueByHeader(rows[i], hdr, 'last present date', 13),
+      alertMessage: getValueByHeader(rows[i], hdr, 'alert message', 14),
+      recordedOn: getValueByHeader(rows[i], hdr, 'recordedon', 15)
+    });
+  }
+
+  return { success: true, alerts: alerts };
+}
 
 function countNonSundayDays(fromDateStr, toDateStr) {
   try {
@@ -2956,9 +3266,10 @@ function sendLeaveApplicationEmail(employee, data, leaveId) {
     // Build warning section if present
     let warningHtml = '';
     if (data.warning) {
+      const cleanWarning = data.warning.toString().replace(/^.*WARNING:\s*/i, '');
       warningHtml = '<div style="background-color: #fff3cd; padding: 15px; border-left: 4px solid #ff9800; margin: 15px 0; border-radius: 4px;">' +
         '<p style="color: #856404; margin: 0;"><strong>⚠️ WARNING:</strong></p>' +
-        '<p style="color: #856404; margin: 5px 0 0 0;">' + data.warning.replace(/⚠️ WARNING: /g, '') + '</p>' +
+        '<p style="color: #856404; margin: 5px 0 0 0;">' + cleanWarning + '</p>' +
         '</div>';
     }
 
@@ -3285,42 +3596,13 @@ function sendLeaveStatusUpdateEmail(employee, leaveRecord) {
   }
 }
 
-function testLeaveMail() {
-  const employee = {
-    email: 'employee@dashverse.ai',
-    name: 'Test Employee',
-    manager: 'Test Manager',
-    managerEmail: 'manager@dashverse.ai',
-    reportingManager: 'Test Reporting Manager',
-    reportingManagerEmail: 'reporting@dashverse.ai'
-  };
-
-  const data = {
-    name: 'Test Employee',
-    leaveType: 'Sick Leave',
-    fromDate: Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd'),
-    toDate: Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd'),
-    reason: 'Testing leave notification',
-    manager: employee.manager,
-    managerEmail: employee.managerEmail,
-    reportingManager: employee.reportingManager,
-    reportingManagerEmail: employee.reportingManagerEmail
-  };
-
-  const leaveId = 'LVTEST001';
-  const result = sendLeaveApplicationEmail(employee, data, leaveId);
-  Logger.log(JSON.stringify(result));
-  return result;
-}
-
 function testEmailSystem(data) {
   const result = { success: false, message: '', details: {} };
   try {
-    // Test MailApp availability
     const testEmail = data.testEmail || 'test@dashverse.ai';
     const subject = 'AttendPro Email System Test - ' + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss');
     const htmlBody = '<html><body style="font-family: Arial, sans-serif;">' +
-      '<h2 style="color: #667eea;">✅ AttendPro Email System Test</h2>' +
+      '<h2 style="color: #667eea;">AttendPro Email System Test</h2>' +
       '<p>This is a test email to verify the email system is working properly.</p>' +
       '<p><strong>Test Time:</strong> ' + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss') + '</p>' +
       '<p><strong>Status:</strong> <span style="color: #16a34a; font-weight: bold;">Email System Operational</span></p>' +
