@@ -259,7 +259,7 @@
 
         /* STAT CARDS */
         .st-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(165px,1fr)); gap:14px; margin-bottom:20px }
-        .stc { background:var(--card); backdrop-filter:blur(22px); border:1px solid var(--gb); border-radius:var(--r); padding:20px; transition:var(--tr-3d); transform-style:preserve-3d; position:relative; overflow:visible; box-shadow:var(--sh); animation:shard-in 0.5s cubic-bezier(0.68, -0.55, 0.27, 1.55) forwards; }
+        .stc { background:var(--card); backdrop-filter:blur(22px); border:1px solid var(--gb); border-radius:var(--r); padding:20px; transition:var(--tr-3d); transform-style:preserve-3d; position:relative; overflow:visible; box-shadow:var(--sh); animation:shard-in 0.5s cubic-bezier(0.68, -0.55, 0.27, 1.55) forwards; cursor:pointer; user-select:none; touch-action:manipulation; }
         .stc:hover { transform:translateY(-5px) scale(1.02) rotateX(2deg) rotateY(-2deg); box-shadow:0 15px 35px rgba(0,0,0,0.2); z-index:10; }
         .stc::after { content:''; position:absolute; bottom:0; left:0; right:0; height:3px }
         .stc.pk::after { background:linear-gradient(90deg,#e879f9,#7c3aed) }
@@ -656,6 +656,19 @@
         </div>
     </div>
 
+    <!-- EMPLOYEE LIST MODAL -->
+    <div class="m-ov" id="empListModalOv" onclick="if(event.target===this)closeEmpListModal()">
+        <div class="modal">
+            <div class="m-hdr">
+                <div class="m-t" id="empListModalTitle">Employees</div>
+                <button class="m-close" onclick="closeEmpListModal()">✕</button>
+            </div>
+            <div id="empListModalBody" style="margin-top:12px;">
+                <div class="empty"><div class="ei">⏳</div><h3>Loading...</h3></div>
+            </div>
+        </div>
+    </div>
+
     <!-- LOADING OVERLAY -->
     <div class="loading-overlay" id="loadingOverlay">
         <div class="loading-card">
@@ -797,11 +810,11 @@
                         <div class="hn-text"><strong>HR Panel:</strong> You can add/edit/remove employees, manage projects, and view all records. <strong>Leave approvals</strong> are handled exclusively by Managers — <a href="manager.html" style="color:var(--p);font-weight:700;">open Manager Portal</a>.</div>
                     </div>
                     <div class="st-grid">
-                        <div class="stc pk"><div class="st-ic">👥</div><div class="st-n" id="stTotalEmp">—</div><div class="st-l">Total Employees</div></div>
-                        <div class="stc gr"><div class="st-ic">✅</div><div class="st-n" id="stPresent">—</div><div class="st-l">Present Today</div></div>
-                        <div class="stc ye"><div class="st-ic">🕐</div><div class="st-n" id="stPending">—</div><div class="st-l">Pending Leaves</div></div>
-                        <div class="stc rd"><div class="st-ic">❌</div><div class="st-n" id="stAbsent">—</div><div class="st-l">Absent Today</div></div>
-                        <div class="stc pu"><div class="st-ic">📄</div><div class="st-n" id="stExpiring">—</div><div class="st-l">Contracts Expiring</div></div>
+                        <div class="stc pk" onclick="showEmployeeListModal('all')" title="View all employees"><div class="st-ic">👥</div><div class="st-n" id="stTotalEmp">—</div><div class="st-l">Total Employees</div></div>
+                        <div class="stc gr" onclick="showEmployeeListModal('present')" title="View today's attendance"><div class="st-ic">✅</div><div class="st-n" id="stPresent">—</div><div class="st-l">Present Today</div></div>
+                        <div class="stc ye" onclick="showPanel('leaves')" title="View pending leave requests"><div class="st-ic">🕐</div><div class="st-n" id="stPending">—</div><div class="st-l">Pending Leaves</div></div>
+                        <div class="stc rd" onclick="showEmployeeListModal('absent')" title="View attendance details"><div class="st-ic">❌</div><div class="st-n" id="stAbsent">—</div><div class="st-l">Absent Today</div></div>
+                        <div class="stc pu" onclick="showPanel('contracts')" title="View contracts expiring soon"><div class="st-ic">📄</div><div class="st-n" id="stExpiring">—</div><div class="st-l\">Contracts Expiring</div></div>
                     </div>
                     <div class="qa-grid">
                         <div class="qa" onclick="openAddEmp()"><div class="qa-ic">➕</div><div class="qa-lbl">Add Employee</div></div>
@@ -1497,7 +1510,7 @@
             });
         }
 
-        const ALL_ROLES = ['AI Artist','Creative Producer','Operations Associate','Writer Intern','Ops Intern','Associate Producer','Animation Artist','Show Coordinator','Operations Manager','QC Associate','Video Editor','VO Associate','Sound Engineer','STB Artist','Image Editor','Animation POC','Productivity Tracker','Associate Producer - Script','Creative Producer - Script','AI POC','Music Composer','Character Artist','Video Producer','Art Lead','Promo Producer','Content Analyst','Script Consultant','Creative Director - Video','Associate Creative Producer','Creative Director - Pre','VO Supervisor','Animation Lead','Production Ops Intern','Creative Director - Art','Post Production Supervisor','Animation Artist - Intern'].sort((a,b)=>a.localeCompare(b));
+        const ALL_ROLES = ['AI Artist','Creative Producer','Operations Associate','Writer Intern','Ops Intern','Associate Producer','Animation Artist','Show Coordinator','Operations Manager','QC Associate','Video Editor','VO Associate','Sound Engineer','STB Artist','Image Editor','Animation POC','Productivity Tracker','Associate Producer - Script','Creative Producer - Script','AI POC','Music Composer','Character Artist','Video Producer','Art Lead','Promo Producer','Content Analyst','Script Consultant','Creative Director - Video','Associate Creative Producer','Creative Director - Pre','VO Supervisor','Animation Lead','Production Ops Intern','Creative Director - Art','Post Production Supervisor','Animation Artist - Intern','Human Resources'].sort((a,b)=>a.localeCompare(b));
 
         const PANEL_META = {
             dash:['HR Dashboard','Human Resources Overview'],
@@ -1555,6 +1568,45 @@
             document.getElementById('credModalOv').classList.remove('on');
             document.body.style.overflow = '';
             lastCreatedCreds = null;
+        }
+
+        function closeEmpListModal() {
+            document.getElementById('empListModalOv').classList.remove('on');
+        }
+
+        function showEmployeeListModal(filterType = 'all') {
+            const today = todayStr();
+            let filtered = [...allEmp];
+            let title = 'Employees';
+
+            if (filterType === 'present') {
+                const presentEmails = allAtt
+                    .filter(a => (a.date || '').toString().substring(0, 10) === today)
+                    .map(a => (a.email || '').toLowerCase());
+                filtered = filtered.filter(e => presentEmails.includes((e.email || '').toLowerCase()));
+                title = `✅ Present Today (${filtered.length})`;
+            } else if (filterType === 'absent') {
+                const presentEmails = allAtt
+                    .filter(a => (a.date || '').toString().substring(0, 10) === today)
+                    .map(a => (a.email || '').toLowerCase());
+                filtered = filtered.filter(e => !presentEmails.includes((e.email || '').toLowerCase()));
+                title = `❌ Absent Today (${filtered.length})`;
+            } else {
+                title = `👥 All Employees (${filtered.length})`;
+            }
+
+            document.getElementById('empListModalTitle').textContent = title;
+
+            const html = filtered.length
+                ? `<div class="tw"><table style="width:100%;"><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Department</th><th>Type</th></tr></thead><tbody>${filtered
+                      .map(e => `<tr><td><strong>${e.name || '—'}</strong></td><td style="font-size:.8rem;color:var(--p);">${e.email || '—'}</td><td>${e.role || '—'}</td><td>${e.department || '—'}</td><td><span class="badge ${
+                          e.type === 'Permanent' ? 'bd-ok' : e.type === 'Contract' ? 'bd-warn' : 'bd-info'
+                      }">${e.type || '—'}</span></td></tr>`)
+                      .join('')}</tbody></table></div>`
+                : `<div class="empty"><div class="ei">📭</div><h3>No employees found</h3></div>`;
+
+            document.getElementById('empListModalBody').innerHTML = html;
+            document.getElementById('empListModalOv').classList.add('on');
         }
 
         function setPwdResetAlert(message, type='info') {
@@ -1933,7 +1985,7 @@
 
         function safeParseDate(val){if(!val)return null;const s=String(val).trim();if(s.startsWith('1899-12-30'))return null;const d=new Date(s);if(!isNaN(d.getTime()))return d;const p=s.split('-');if(p.length===3){const d2=new Date(parseInt(p[0]),parseInt(p[1])-1,parseInt(p[2]));if(!isNaN(d2.getTime()))return d2}return null;}
         function fmtDate(val){const d=safeParseDate(val);if(!d)return'N/A';try{return d.toLocaleDateString('en-US',{year:'numeric',month:'short',day:'numeric'})}catch{return String(val)}}
-        function extractTime(val){if(!val)return'--';const s=String(val).trim();const iso=s.match(/T(\d{2}):(\d{2})(?::(\d{2}))?/);if(iso){let h=parseInt(iso[1],10),m=iso[2];const ap=h>=12?'PM':'AM';h=h%12||12;return`${h}:${m} ${ap}`}const plain=s.match(/(\d{1,2}):(\d{2})(?::\d{2})?\s*(AM|PM)?/i);if(plain){let h=parseInt(plain[1],10),m=plain[2];let ap=(plain[3]||'').toUpperCase();if(!ap){ap=h>=12?'PM':'AM';h=h%12||12;}return`${h}:${m} ${ap}`}return'--';}
+        function extractTime(val){if(!val)return'--';const s=String(val).trim();const iso=s.includes('T')?new Date(s):null;if(iso&&!isNaN(iso.getTime()))return iso.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',hour12:true,timeZone:'Asia/Kolkata'});const plain=s.match(/(\d{1,2}):(\d{2})(?::\d{2})?\s*(AM|PM)?/i);if(plain){let h=parseInt(plain[1],10),m=plain[2];let ap=(plain[3]||'').toUpperCase();if(!ap){ap=h>=12?'PM':'AM';h=h%12||12;}return`${h}:${m} ${ap}`}return'--';}
         const todayStr=()=>new Date().toISOString().split('T')[0];
         function getLeaveStatDate(leave){return safeParseDate(leave?.fromDate)||safeParseDate(leave?.appliedOn)||safeParseDate(leave?.toDate)}
         function normalizeEmpKey(val){return (val||'').toString().trim().toLowerCase();}

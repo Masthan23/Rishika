@@ -945,8 +945,8 @@
                 return emailMatch || idMatch;
             });
             if(!found) return {success:false,message:'Employee not found. Please check credentials and contact HR.'};
-            const status = String(found.status||'Active').toLowerCase();
-            if(status==='inactive') return {success:false,message:'Your account is inactive. Please contact HR.'};
+            const status = String(found.status||'Active').trim().toLowerCase();
+            if(status&&status!=='active') return {success:false,message:'Your account is inactive. Please contact HR.'};
             const storedPass = (found.password||'').toString().trim();
             if(storedPass && storedPass!==wantedPass) return {success:false,message:'Incorrect password. Please try again.'};
             return {success:true,employee:{...found}};
@@ -1337,8 +1337,8 @@
         }
 
         const employee = res.employee;
-        const status = String(employee.status || 'Active').toLowerCase();
-        if (status === 'inactive') {
+        const status = String(employee.status || 'Active').trim().toLowerCase();
+        if (status && status !== 'active') {
             return { success: false, message: 'Your account is inactive. Please contact HR.' };
         }
 
@@ -1619,6 +1619,20 @@
             return false;
         }
         emp = res.employee;
+        const status = String(emp.status || 'Active').trim().toLowerCase();
+        if (status && status !== 'active') {
+            if (firebase.auth && firebase.auth().currentUser) {
+                await firebase.auth().signOut().catch(() => {});
+            }
+            emp = null;
+            sessionStorage.removeItem('empLoggedIn');
+            sessionStorage.removeItem('empData');
+            sessionStorage.removeItem(EMP_AUTO_RESUME_KEY);
+            document.getElementById('pgDash').classList.remove('on');
+            document.getElementById('pgLogin').classList.add('on');
+            showAlert('loginAlerts', 'Your account is inactive. Please contact HR.', 'err');
+            return false;
+        }
         if (emp.mustChangePassword) {
             sessionStorage.removeItem('empLoggedIn');
             sessionStorage.removeItem('empData');

@@ -430,8 +430,10 @@ function employeeLogin(data) {
   }
 
   const existingEmployee = employeeLookup.employee;
-  const status = String(existingEmployee.status || 'Active').toLowerCase();
-  if (status === 'inactive') return { success: false, message: 'Your account is inactive. Please contact HR.' };
+  const status = String(existingEmployee.status || 'Active').trim().toLowerCase();
+  if (status && status !== 'active') {
+    return { success: false, message: 'Your account is inactive. Please contact HR.' };
+  }
 
   const ss = SpreadsheetApp.openById(SHEET_ID);
   const sheet = ss.getSheetByName('Employees');
@@ -448,6 +450,10 @@ function employeeLogin(data) {
     const rowEmail = normalizeEmail(getValueByHeader(rows[i], hdr, 'email', 1));
     const rowId = (getValueByHeader(rows[i], hdr, 'empid', 0) || '').toString().trim().toUpperCase();
     if ((email && rowEmail === targetEmail) || (!email && rowId === empId)) {
+      const rowStatus = String(getValueByHeader(rows[i], hdr, 'status', -1) || 'Active').trim().toLowerCase();
+      if (rowStatus && rowStatus !== 'active') {
+        return { success: false, message: 'Your account is inactive. Please contact HR.' };
+      }
       const storedPass = (getValueByHeader(rows[i], hdr, 'password', 2) || '').toString().trim();
       if (storedPass && storedPass !== password) {
         return { success: false, message: 'Incorrect password. Please try again.' };
@@ -621,6 +627,38 @@ function formatSheetDate(value) {
     const date = new Date(value);
     if (isNaN(date.getTime())) return String(value);
     return Utilities.formatDate(date, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  } catch(e) {
+    return String(value);
+  }
+}
+
+function formatSheetTime(value) {
+  if (!value) return '';
+  try {
+    const tz = Session.getScriptTimeZone();
+    if (value instanceof Date && !isNaN(value.getTime())) {
+      return Utilities.formatDate(value, tz, 'h:mm a');
+    }
+    if (typeof value === 'number' && isFinite(value)) {
+      const millis = Math.round((value % 1) * 24 * 60 * 60 * 1000);
+      const base = new Date(1899, 11, 30, 0, 0, 0, 0);
+      return Utilities.formatDate(new Date(base.getTime() + millis), tz, 'h:mm a');
+    }
+    const raw = value.toString().trim();
+    const timeOnly = raw.match(/^(\d{1,2}):(\d{2})(?::\d{2})?\s*(AM|PM)?$/i);
+    if (timeOnly) {
+      let hours = parseInt(timeOnly[1], 10);
+      const minutes = timeOnly[2];
+      let period = (timeOnly[3] || '').toUpperCase();
+      if (!period) {
+        period = hours >= 12 ? 'PM' : 'AM';
+        hours = hours % 12 || 12;
+      }
+      return hours + ':' + minutes + ' ' + period;
+    }
+    const parsed = new Date(raw);
+    if (!isNaN(parsed.getTime())) return Utilities.formatDate(parsed, tz, 'h:mm a');
+    return raw;
   } catch(e) {
     return String(value);
   }
@@ -1961,7 +1999,7 @@ function getEmployeesByProject(data) {
 
     const dateStr = formatSheetDate(attRows[r][iDate]) || '';
     if (timeFilter === 'today' && dateStr !== today) continue;
-    const timeStr = (attRows[r][iTime] || '').toString().trim();
+    const timeStr = formatSheetTime(attRows[r][iTime]) || '';
     const dateTimeKey = (dateStr || '') + ' ' + (timeStr || '');
 
     const prev = latestByEmail[email];
@@ -2337,7 +2375,7 @@ function checkLoginBeforeCutoff(data) {
       const rowEmail = normalizeEmail(existing[i][aIMail]);
       if (rowEmail === normalizeEmail(data.email) && rowDate === today) {
         loggedToday = true;
-        const checkInStr = existing[i][aICheckIn];
+        const checkInStr = formatSheetTime(existing[i][aICheckIn]);
         if (checkInStr) latestCheckIn = checkInStr;
         if (checkInStr) {
           const checkInTime = parseTimeTo24Hour(checkInStr);
@@ -2608,7 +2646,7 @@ function getAttendance(email) {
       result.push({
         recordId: rows[i][iRec] || '',
         date: formatSheetDate(rows[i][iDate]) || '',
-        checkIn: rows[i][iCIn] || '',
+        checkIn: formatSheetTime(rows[i][iCIn]) || '',
         location: rows[i][iLoc] || 'Office',
         status: rows[i][iSts] || 'Present',
         currentProject: iProj >= 0 ? (rows[i][iProj] || '') : '',
@@ -2653,7 +2691,7 @@ function getAllAttendance() {
         department: rows[i][iDept] || '',
         currentProject: iProj >= 0 ? (rows[i][iProj] || '') : '',
         date: formatSheetDate(rows[i][iDate]) || '',
-        checkIn: rows[i][iCIn] || '',
+        checkIn: formatSheetTime(rows[i][iCIn]) || '',
         location: rows[i][iLoc] || 'Office',
         status: rows[i][iSts] || 'Present',
         attendanceColor: iColor >= 0 ? (rows[i][iColor] || '') : ''

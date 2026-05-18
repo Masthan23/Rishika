@@ -1144,8 +1144,8 @@
   function extractTime(val){
     if(!val) return '--';
     const s=String(val).trim();
-    const iso=s.match(/T(\d{2}):(\d{2})(?::(\d{2}))?/);
-    if(iso){let h=parseInt(iso[1],10),m=iso[2];const ap=h>=12?'PM':'AM';h=h%12||12;return `${h}:${m} ${ap}`;}
+    const iso=s.includes('T')?new Date(s):null;
+    if(iso&&!isNaN(iso.getTime())) return iso.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',hour12:true,timeZone:'Asia/Kolkata'});
     const plain=s.match(/(\d{1,2}):(\d{2})(?::\d{2})?\s*(AM|PM)?/i);
     if(plain){let h=parseInt(plain[1],10),m=plain[2];let ap=(plain[3]||'').toUpperCase();if(!ap){ap=h>=12?'PM':'AM';h=h%12||12;}return `${h}:${m} ${ap}`;}
     return '--';
