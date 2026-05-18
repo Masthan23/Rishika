@@ -991,6 +991,7 @@
                                 <div style="font-size:.8rem;color:var(--muted);margin-top:6px;" id="monitorRangeMeta">Track who is on leave, active, or not yet logged for any selected day or date range.</div>
                             </div>
                             <button class="btn btn-ghost btn-sm" onclick="applyLeaveMonitorRange()">🔄 Refresh View</button>
+                            <button class="btn btn-p btn-sm" id="monitorSaveMissingBtn" onclick="saveSelectedMissingLoginsToSheet()">Save Missing To Sheet</button>
                         </div>
                         <div class="sb-bar">
                             <div class="date-btn-wrap" style="min-width:150px;"><input type="date" id="monitorFrom" onchange="applyLeaveMonitorRange()"/></div>
@@ -1513,9 +1514,10 @@
 
         const CACHE = {
             _s:{},TTL:90000,
+            key(action,data={}){const clean={};Object.keys(data||{}).sort().forEach(k=>{const v=data[k];if(v!==undefined&&v!==null&&v!=='')clean[k]=v});const suffix=Object.keys(clean).length?'?'+JSON.stringify(clean):'';return action+suffix},
             set(k,v){this._s[k]={v,ts:Date.now()};try{sessionStorage.setItem('atp_hr_'+k,JSON.stringify({v,ts:Date.now()}))}catch{}},
             get(k){let e=this._s[k];if(!e){try{const r=sessionStorage.getItem('atp_hr_'+k);if(r)e=this._s[k]=JSON.parse(r)}catch{}}; if(!e||Date.now()-e.ts>this.TTL){delete this._s[k];return null}return e.v},
-            clear(k){delete this._s[k];try{sessionStorage.removeItem('atp_hr_'+k)}catch{}},
+            clear(k){Object.keys(this._s).forEach(key=>{if(key===k||key.startsWith(k+'?'))delete this._s[key]});try{Object.keys(sessionStorage).filter(key=>key==='atp_hr_'+k||key.startsWith('atp_hr_'+k+'?')).forEach(key=>sessionStorage.removeItem(key))}catch{}},
             clearAll(){this._s={};try{Object.keys(sessionStorage).filter(k=>k.startsWith('atp_hr_')).forEach(k=>sessionStorage.removeItem(k))}catch{}}
         };
 
@@ -1523,7 +1525,7 @@
         let editEmail=null,confCb=null,isLive=false,dataLoaded=false,projEditId=null,mgrProfileEditEmail=null,mgrProfileEditId=null,mgrProfileEditType=null,hrProfileEditUsername=null,pwdResetEmployee=null;
         let leaveMonitorDays=[],leaveMonitorSelectedDates=[];
         const msState={modal:new Set()};
-        const LS={EMP:'atp_emp',ATT:'atp_att',LV:'atp_lv',PROJ:'atp_projects',MGR:'atp_managers',HR:'atp_hr_profiles'};
+        const LS={EMP:'atp_emp',ATT:'atp_att',LV:'atp_lv',PROJ:'atp_projects',MGR:'atp_managers',HR:'atp_hr_profiles',ABS:'atp_absences',ALERTS:'atp_missing_alerts'};
         const lsGet=k=>{try{return JSON.parse(localStorage.getItem(k)||'[]')}catch{return[]}};
         const lsSet=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch{}};
         const isDashverseEmail=e=>e&&ALLOWED_DOMAINS.some(d=>e.toLowerCase().endsWith(d));
@@ -1685,6 +1687,9 @@
 
             btn.textContent = 'Saving...';
             const result = await callAPI('updateEmployee', payload);
+            CACHE.clear('getEmployees');
+            CACHE.clear('getEmployeesDirectory');
+            CACHE.clear('getEmployeeById');
 
             if (!result.success) {
                 btn.disabled = false;
@@ -1845,6 +1850,7 @@
                 case 'getEmployees':return{success:true,employees:lsGet(LS.EMP)};
                 case 'getEmployeesDirectory':return{success:true,employees:lsGet(LS.EMP).map(stripEmployeeForDirectory)};
                 case 'getEmployeeById':{const wanted=String(data.empId||data.id||'').trim().toUpperCase();const employee=lsGet(LS.EMP).find(e=>String(e.id||e.empId||'').trim().toUpperCase()===wanted);return employee?{success:true,employee}:{success:false,message:'Employee not found'};}
+                case 'getMissingLoginAlerts':{const target=String(data.date||'').substring(0,10);const rows=lsGet(LS.ALERTS);return{success:true,alerts:target?rows.filter(r=>String(r.date||'').substring(0,10)===target):rows};}
                 case 'addEmployee':{
                     const emps=lsGet(LS.EMP);
                     if(emps.find(e=>e.email?.toLowerCase()===(data.email||'').toLowerCase()))return{success:false,message:'Email already exists!'};
@@ -1875,6 +1881,21 @@
                 case 'deleteEmployee':{lsSet(LS.EMP,lsGet(LS.EMP).filter(e=>e.email?.toLowerCase()!==(data.email||'').toLowerCase()));return{success:true}}
                 case 'getAllAttendance':return{success:true,attendance:lsGet(LS.ATT)};
                 case 'getAllLeaves':return{success:true,leaves:lsGet(LS.LV)};
+                case 'recordAbsent':
+                case 'captureAbsentUsers':{
+                    const targetDate=String(data.date||data.targetDate||todayStr()).substring(0,10);
+                    const employees=lsGet(LS.EMP),attendance=lsGet(LS.ATT),leaves=lsGet(LS.LV),absences=lsGet(LS.ABS),alerts=lsGet(LS.ALERTS);
+                    const present=new Set(attendance.filter(a=>safeDateStr(a.date)===targetDate).map(a=>normalizeMonitorEmail(a.email)));
+                    const onLeave=new Set(leaves.filter(l=>String(l.status||'').toLowerCase()==='approved'&&targetDate>=safeDateStr(l.fromDate)&&targetDate<=safeDateStr(l.toDate||l.fromDate)).map(l=>normalizeMonitorEmail(l.email)));
+                    const already=new Set(absences.filter(a=>String(a.date||'').substring(0,10)===targetDate).map(a=>normalizeMonitorEmail(a.email)));
+                    const newRows=[];
+                    employees.forEach(emp=>{const email=normalizeMonitorEmail(emp.email);if(!email||String(emp.status||'Active').toLowerCase()!=='active')return;if(!isEmployeeExpectedOnDate(emp,targetDate)||present.has(email)||onLeave.has(email)||already.has(email))return;newRows.push({date:targetDate,empId:emp.id||emp.empId||'',email,name:emp.name||'',department:emp.department||'',role:emp.role||'',reportingManager:emp.reportingManager||'',manager:emp.manager||'',project:emp.currentProject||emp.project||'',workMode:emp.workMode||'',employmentType:emp.employmentType||'Permanent',status:'Absent'});});
+                    if(newRows.length){absences.push(...newRows);lsSet(LS.ABS,absences);}
+                    const alertRows=[];
+                    newRows.forEach(row=>{const count=absences.filter(a=>normalizeMonitorEmail(a.email)===row.email).length;if(count>=5&&!alerts.some(a=>normalizeMonitorEmail(a.email)===row.email&&String(a.date||'').substring(0,10)===targetDate)){alertRows.push({...row,consecutiveMissingDays:count,lastPresentDate:'',alertMessage:'Missing login for 5 or more days',recordedOn:new Date().toISOString()});}});
+                    if(alertRows.length){alerts.push(...alertRows);lsSet(LS.ALERTS,alerts);}
+                    return{success:true,date:targetDate,recorded:newRows.length,alreadyRecorded:already.size,missingAlertsCreated:alertRows.length};
+                }
                 case 'updateLeaveStatus':{
                     const rows=lsGet(LS.LV),i=rows.findIndex(l=>String(l.id)===String(data.id));
                     if(i<0)return{success:false,message:'Leave record not found'};
@@ -1887,9 +1908,9 @@
                 }
                 case 'getProjects':return{success:true,projects:lsGet(LS.PROJ)};
                 case 'getManagers':return{success:true,managers:lsGet(LS.MGR)};
-                case 'addManager':{const rows=lsGet(LS.MGR);if(rows.find(r=>r.email?.toLowerCase()===(data.email||'').toLowerCase()))return{success:false,message:'Manager profile already exists!'};const row={...data,id:'MGR'+Date.now(),addedOn:new Date().toISOString(),email:(data.email||'').toLowerCase()};rows.push(row);lsSet(LS.MGR,rows);return{success:true,message:'Manager added!',id:row.id}}
-                case 'updateManager':{const rows=lsGet(LS.MGR);const i=rows.findIndex(r=>r.email?.toLowerCase()===(data.email||'').toLowerCase());if(i<0)return{success:false,message:'Manager not found'};rows[i]={...rows[i],...data,email:(data.email||'').toLowerCase()};lsSet(LS.MGR,rows);return{success:true,message:'Manager updated!'}}
-                case 'deleteManager':{lsSet(LS.MGR,lsGet(LS.MGR).filter(r=>r.email?.toLowerCase()!==(data.email||'').toLowerCase()));return{success:true,message:'Manager deleted!'}}
+                case 'addManager':{const rows=lsGet(LS.MGR),email=(data.email||'').toLowerCase(),type=(data.managerType||'Manager').toLowerCase();if(rows.find(r=>(r.email||'').toLowerCase()===email&&(r.managerType||'Manager').toLowerCase()===type))return{success:false,message:'Manager profile already exists!'};const row={...data,id:'MGR'+Date.now(),addedOn:new Date().toISOString(),email};rows.push(row);lsSet(LS.MGR,rows);return{success:true,message:'Manager added!',id:row.id}}
+                case 'updateManager':{const rows=lsGet(LS.MGR),email=(data.email||'').toLowerCase(),type=(data.originalManagerType||data.managerType||'Manager').toLowerCase();const i=rows.findIndex(r=>String(r.id||'')===String(data.id||'')||((r.email||'').toLowerCase()===email&&(r.managerType||'Manager').toLowerCase()===type));if(i<0)return{success:false,message:'Manager not found'};rows[i]={...rows[i],...data,email,managerType:data.managerType||rows[i].managerType};lsSet(LS.MGR,rows);return{success:true,message:'Manager updated!'}}
+                case 'deleteManager':{const email=(data.email||'').toLowerCase(),type=(data.originalManagerType||data.managerType||'').toLowerCase();lsSet(LS.MGR,lsGet(LS.MGR).filter(r=>!(String(r.id||'')===String(data.id||'')||((r.email||'').toLowerCase()===email&&(!type||(r.managerType||'').toLowerCase()===type)))));return{success:true,message:'Manager deleted!'}}
                 case 'getHRProfiles':return{success:true,profiles:lsGet(LS.HR)};
                 case 'addHRProfile':{const rows=lsGet(LS.HR);if(rows.find(r=>String(r.username||'').toLowerCase()===String(data.username||'').toLowerCase()))return{success:false,message:'Username already exists'};const row={...data,id:'HR'+Date.now(),addedOn:new Date().toISOString()};rows.push(row);lsSet(LS.HR,rows);return{success:true,message:'HR profile created successfully',id:row.id}}
                 case 'updateHRProfile':{const rows=lsGet(LS.HR);const i=rows.findIndex(r=>String(r.username||'').toLowerCase()===String(data.username||'').toLowerCase());if(i<0)return{success:false,message:'HR profile not found'};rows[i]={...rows[i],...data};lsSet(LS.HR,rows);return{success:true,message:'HR profile updated successfully'}}
@@ -1901,11 +1922,12 @@
         }
 
         async function callAPI(action,data={},useCache=false){
-            if(useCache){const c=CACHE.get(action);if(c)return c}
+            const cacheKey=CACHE.key(action,data);
+            if(useCache){const c=CACHE.get(cacheKey);if(c)return c}
             const params=new URLSearchParams({action});
             Object.entries(data).forEach(([k,v])=>{if(v!==undefined&&v!==null&&v!==''){if(Array.isArray(v))params.set(k,JSON.stringify(v));else params.set(k,String(v))}});
             const ctrl=new AbortController();const timer=setTimeout(()=>ctrl.abort(),TIMEOUT_MS);
-            try{const res=await fetch(`${SCRIPT_URL}?${params}`,{method:'GET',signal:ctrl.signal});clearTimeout(timer);const txt=await res.text();const clean=txt.replace(/^[^{[]*/,'').replace(/[^}\]]*$/,'');const json=JSON.parse(clean||txt);isLive=true;if(useCache&&json.success)CACHE.set(action,json);return json;}
+            try{const res=await fetch(`${SCRIPT_URL}?${params}`,{method:'GET',signal:ctrl.signal});clearTimeout(timer);const txt=await res.text();const clean=txt.replace(/^[^{[]*/,'').replace(/[^}\]]*$/,'');const json=JSON.parse(clean||txt);isLive=true;if(useCache&&json.success)CACHE.set(cacheKey,json);return json;}
             catch(err){clearTimeout(timer);isLive=false;return localFallback(action,data)}
         }
 
@@ -1951,7 +1973,7 @@
         function updateTopbarMeta(name){const wrap=document.getElementById('empTopStats');if(wrap)wrap.style.display=name==='emp'?'flex':'none';}
         const safeDateStr=val=>{const d=safeParseDate(val);return d?d.toISOString().split('T')[0]:String(val||'').trim().substring(0,10);}
         const normalizeMonitorEmail=email=>(email||'').toString().trim().toLowerCase();
-        function getEmployeeStartDate(emp){return safeParseDate(emp?.joinDate)||new Date()}
+        function getEmployeeStartDate(emp){return safeParseDate(emp?.joinDate)}
         function isEmployeeExpectedOnDate(emp,dateStr){
             const target=safeParseDate(dateStr),start=getEmployeeStartDate(emp);
             if(!target||!start)return true;
@@ -2028,6 +2050,37 @@
         function setLeaveMonitorToday(){const today=todayStr();document.getElementById('monitorFrom').value=today;document.getElementById('monitorTo').value=today;applyLeaveMonitorRange(today)}
         function selectLeaveMonitorDay(dateStr){leaveMonitorSelectedDates=leaveMonitorSelectedDates.includes(dateStr)?leaveMonitorSelectedDates.filter(date=>date!==dateStr):[...leaveMonitorSelectedDates,dateStr].sort();renderLeaveMonitor()}
         function toggleLeaveMonitorSelectAll(){if(leaveMonitorDays.length===0)return;leaveMonitorSelectedDates=leaveMonitorSelectedDates.length===leaveMonitorDays.length?[]:leaveMonitorDays.map(day=>day.date);renderLeaveMonitor()}
+        async function saveSelectedMissingLoginsToSheet(){
+            const selectedDays=getSelectedLeaveMonitorDays().filter(day=>day.missing&&day.missing.length);
+            if(!selectedDays.length){toast('No Missing Logins','There are no selected missing-login rows to save.','info');return}
+            const today=todayStr(),todaySelected=selectedDays.some(day=>day.date===today);
+            if(todaySelected&&!confirm('Today is selected. Save today\'s current missing-login list to the Absences sheet now?'))return;
+            const btn=document.getElementById('monitorSaveMissingBtn'),old=btn?btn.innerHTML:'';
+            if(btn){btn.disabled=true;btn.innerHTML='Saving...'}
+            try{
+                let recorded=0,alerts=0,already=0,failed=[];
+                for(const day of selectedDays){
+                    const res=await callAPI('recordAbsent',{date:day.date});
+                    if(!res.success){failed.push(`${fmtDate(day.date)}: ${res.message||'failed'}`);continue}
+                    recorded+=Number(res.recorded||0);
+                    alerts+=Number(res.missingAlertsCreated||0);
+                    already+=Number(res.alreadyRecorded||0);
+                }
+                const missingRes=await callAPI('getMissingLoginAlerts');
+                if(missingRes&&missingRes.success)allMissingLoginAlerts=missingRes.alerts||[];
+                applyLeaveMonitorRange(leaveMonitorSelectedDates[0]);
+                if(failed.length){
+                    toast('Partial Save',`${recorded} absence row(s) saved. ${failed.length} day(s) failed.`,'warn');
+                    console.warn('Missing login save failures:',failed);
+                }else{
+                    toast('Saved To Sheet',`${recorded} new absence row(s) saved${already?`, ${already} already existed`:''}${alerts?`, ${alerts} alert(s) created`:''}.`,'ok');
+                }
+            }catch(err){
+                toast('Save Failed',err.message||'Could not save missing logins.','err');
+            }finally{
+                if(btn){btn.disabled=false;btn.innerHTML=old}
+            }
+        }
 
         // ===== NAVIGATION =====
         function showPanel(name){
@@ -2109,7 +2162,7 @@
                 callAPI('getAllLeaves', {}, true),
                 callAPI('getProjects', {}, true),
                 callAPI('getManagers', {}, true),
-                callAPI('getMissingLoginAlerts', { date: today }, false),
+                callAPI('getMissingLoginAlerts', {}, false),
                 callAPI('getHRProfiles', {}, true)
             ]);
             if (er.success) { allEmp = er.employees || [] }
@@ -2127,7 +2180,7 @@
 
         function showSkeletons(){const sk=(cols)=>`<tr>${Array(cols).fill(0).map(()=>`<td><div class="skeleton" style="height:13px;"></div></td>`).join('')}</tr>`.repeat(4);['empBody','attBody','contractsBody'].forEach((id,i)=>{const el=document.getElementById(id);if(el)el.innerHTML=sk([12,9,9][i])});}
 
-        async function loadEmp(){CACHE.clear('getEmployees');CACHE.clear('getEmployeesDirectory');showLoadingOverlay();const[r,dr]=await Promise.all([callAPI('getEmployees',{},true),callAPI('getEmployeesDirectory',{},true)]);if(r.success){allEmp=r.employees||[];allEmpDirectory=dr.success?(dr.employees||[]):allEmp.map(stripEmployeeForDirectory);renderEmp();populateProjDropdowns();renderLeaveMonitor();buildContractsPanel()}hideLoadingOverlay()}
+        async function loadEmp(){CACHE.clear('getEmployees');CACHE.clear('getEmployeesDirectory');CACHE.clear('getEmployeeById');showLoadingOverlay();const[r,dr]=await Promise.all([callAPI('getEmployees',{},true),callAPI('getEmployeesDirectory',{},true)]);if(r.success){allEmp=r.employees||[];allEmpDirectory=dr.success?(dr.employees||[]):allEmp.map(stripEmployeeForDirectory);renderEmp();populateProjDropdowns();renderLeaveMonitor();buildContractsPanel()}hideLoadingOverlay()}
         function refreshAll(){CACHE.clearAll();dataLoaded=false;showLoadingOverlay();loadAll();toast('🔄 Refreshed','Data reloaded','info')}
 
         async function runSetup(){toast('⚙️ Setting up...','Creating sheets...','info');showLoadingOverlay();const r=await callAPI('setup');hideLoadingOverlay();if(r.success){toast('✅ Done!',r.message,'ok');CACHE.clearAll();loadAll()}else toast('❌ Failed',r.message,'err');}
@@ -2452,6 +2505,8 @@
             const action=editEmail?'updateEmployee':'addEmployee';
             const r=await callAPI(action,payload);
             CACHE.clear('getEmployees');
+            CACHE.clear('getEmployeesDirectory');
+            CACHE.clear('getEmployeeById');
 
             if(r.success){
                 let firebaseSyncMessage = '';
@@ -2511,6 +2566,7 @@
                 renderLeaveMonitor();
                 CACHE.clear('getEmployees');
                 CACHE.clear('getEmployeesDirectory');
+                CACHE.clear('getEmployeeById');
                 const r=await callAPI('deleteEmployee',{email});
                 if(r.success){
                     const msg=firebaseResult.skipped?`${name} removed from sheet. ${firebaseResult.message}`:`${name} removed from sheet and Firebase`;

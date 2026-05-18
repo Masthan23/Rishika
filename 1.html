@@ -1,0 +1,727 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#0a0703" />
+  <title>Dashreels</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400&display=swap" rel="stylesheet" />
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --amber:   #e8a020;
+      --amber2:  #f5c842;
+      --warm:    #c87820;
+      --dark:    #0a0703;
+      --dark2:   #110e07;
+      --charcoal:#1c1810;
+      --cream:   #f2e8d0;
+      --silver:  #c8c0b0;
+    }
+
+    html, body {
+      height: 100%;
+      overflow: hidden;
+      background: var(--dark);
+      font-family: 'DM Sans', sans-serif;
+      color: var(--cream);
+    }
+
+    .stage {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+
+    /* BG WASH */
+    .bg-wash {
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(ellipse 70% 60% at 50% 45%,
+          rgba(232,160,32,0.10) 0%,
+          rgba(200,120,32,0.05) 40%,
+          transparent 70%),
+        radial-gradient(ellipse 40% 50% at 50% 0%,
+          rgba(255,200,80,0.06) 0%,
+          transparent 60%);
+      z-index: 0;
+    }
+
+    /* PROJECTOR BEAM */
+    .projector-beam {
+      position: absolute;
+      top: -5%;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 0;
+      height: 0;
+      border-left: 160px solid transparent;
+      border-right: 160px solid transparent;
+      border-top: 115vh solid rgba(255,210,100,0.022);
+      z-index: 1;
+      pointer-events: none;
+      opacity: 0;
+      filter: blur(18px);
+    }
+
+    /* FILM STRIPS */
+    .filmstrip {
+      position: absolute;
+      left: 0; right: 0;
+      height: 52px;
+      background: #0d0b08;
+      z-index: 8;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+    }
+    .filmstrip.top    { top: 0; }
+    .filmstrip.bottom { bottom: 0; }
+
+    .sprockets {
+      display: flex;
+      align-items: center;
+      height: 100%;
+      width: 200%;
+      flex-shrink: 0;
+    }
+    .sprocket-row {
+      display: flex;
+      align-items: center;
+      gap: 22px;
+      padding: 0 11px;
+      width: 50%;
+      flex-shrink: 0;
+    }
+    .hole {
+      width: 14px;
+      height: 22px;
+      border-radius: 3px;
+      background: var(--dark);
+      border: 1.5px solid #2a2418;
+      flex-shrink: 0;
+      box-shadow: inset 0 1px 3px rgba(0,0,0,0.8);
+    }
+
+    @keyframes stripScroll {
+      from { transform: translateX(0); }
+      to   { transform: translateX(-50%); }
+    }
+
+    /* LEADER COUNTER */
+    .leader {
+      position: absolute;
+      top: 62px;
+      left: 28px;
+      z-index: 20;
+      opacity: 0;
+    }
+    .leader-count {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 2.8rem;
+      line-height: 1;
+      color: var(--amber);
+      text-shadow: 0 0 20px rgba(232,160,32,0.6);
+      letter-spacing: 0.04em;
+    }
+    .leader-label {
+      font-size: 0.52rem;
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      color: var(--silver);
+      opacity: 0.6;
+    }
+
+    /* TAKE BADGE */
+    .take-badge {
+      position: absolute;
+      top: 62px;
+      right: 28px;
+      z-index: 20;
+      text-align: right;
+      opacity: 0;
+    }
+    .take-line {
+      font-size: 0.5rem;
+      letter-spacing: 0.35em;
+      text-transform: uppercase;
+      color: var(--silver);
+      opacity: 0.55;
+    }
+    .take-num {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 1.4rem;
+      letter-spacing: 0.1em;
+      color: var(--amber2);
+    }
+
+    /* CLAPPERBOARD */
+    .clapper-wrap {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -58%);
+      z-index: 30;
+      width: 260px;
+      opacity: 0;
+    }
+    .clapper-body {
+      width: 100%;
+      background: #111008;
+      border: 2px solid #2e2718;
+      border-radius: 3px;
+      padding: 14px 16px 18px;
+      box-shadow:
+        0 20px 60px rgba(0,0,0,0.8),
+        0 0 0 1px rgba(255,200,80,0.08),
+        inset 0 1px 0 rgba(255,220,100,0.06);
+    }
+    .clapper-head {
+      width: 100%;
+      height: 38px;
+      border-radius: 2px 2px 0 0;
+      overflow: hidden;
+      position: relative;
+      margin-bottom: 12px;
+    }
+    .clapper-stripe {
+      position: absolute;
+      inset: 0;
+      background: repeating-linear-gradient(
+        -55deg,
+        #e8a020 0px, #e8a020 10px,
+        #111008 10px, #111008 20px
+      );
+    }
+    .clapper-stick {
+      position: absolute;
+      top: -28px;
+      left: 0;
+      width: 100%;
+      height: 30px;
+      transform-origin: left top;
+      transform: rotate(-28deg);
+    }
+    .clapper-stick-inner {
+      width: 100%;
+      height: 100%;
+      background: repeating-linear-gradient(
+        -55deg,
+        #f5c842 0px, #f5c842 10px,
+        #1a1508 10px, #1a1508 20px
+      );
+      border-radius: 2px 2px 0 0;
+      box-shadow: 0 -4px 16px rgba(0,0,0,0.6);
+    }
+    .clapper-stick-inner::after {
+      content: '';
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      height: 4px;
+      background: rgba(0,0,0,0.5);
+    }
+    .clapper-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      border-bottom: 1px solid rgba(255,220,100,0.08);
+      padding: 5px 0;
+      gap: 8px;
+    }
+    .clapper-row:last-child { border-bottom: none; }
+    .clapper-key {
+      font-size: 0.44rem;
+      letter-spacing: 0.28em;
+      text-transform: uppercase;
+      color: var(--silver);
+      opacity: 0.5;
+      white-space: nowrap;
+    }
+    .clapper-val {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 0.95rem;
+      letter-spacing: 0.08em;
+      color: var(--amber2);
+    }
+
+    /* LOGO STAGE */
+    .logo-stage {
+      position: relative;
+      z-index: 15;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+      opacity: 0;
+    }
+    .gate-frame {
+      position: absolute;
+      inset: -34px -44px;
+      border: 2px solid rgba(232,160,32,0.18);
+      box-shadow: inset 0 0 60px rgba(0,0,0,0.5), 0 0 80px rgba(232,160,32,0.08);
+      pointer-events: none;
+      z-index: 1;
+      opacity: 0;
+    }
+    .gate-frame::before, .gate-frame::after {
+      content: '';
+      position: absolute;
+      width: 16px; height: 16px;
+      border-color: var(--amber);
+      border-style: solid;
+      opacity: 0.7;
+    }
+    .gate-frame::before { top: 8px; left: 8px; border-width: 2px 0 0 2px; }
+    .gate-frame::after  { bottom: 8px; right: 8px; border-width: 0 2px 2px 0; }
+
+    .logo-text {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: clamp(3.5rem, 13vw, 7.5rem);
+      letter-spacing: 0.12em;
+      line-height: 1;
+      color: var(--cream);
+      text-shadow:
+        0 0 80px rgba(232,160,32,0.45),
+        0 0 30px rgba(232,160,32,0.25),
+        0 2px 0 rgba(0,0,0,0.8);
+      white-space: nowrap;
+    }
+    .logo-shine {
+      position: absolute;
+      inset: 0;
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: clamp(3.5rem, 13vw, 7.5rem);
+      letter-spacing: 0.12em;
+      line-height: 1;
+      white-space: nowrap;
+      pointer-events: none;
+      background: linear-gradient(105deg, transparent 25%, rgba(255,240,180,0.92) 50%, transparent 75%);
+      background-size: 280% 100%;
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
+      color: transparent;
+      opacity: 0;
+    }
+    .logo-sub {
+      font-size: clamp(0.55rem, 1.8vw, 0.7rem);
+      letter-spacing: 0.5em;
+      text-transform: uppercase;
+      color: var(--amber);
+      opacity: 0;
+      transform: translateY(6px);
+    }
+    .reel-icon {
+      width: 46px; height: 46px;
+      opacity: 0;
+      transform: rotate(-90deg) scale(0.6);
+      flex-shrink: 0;
+    }
+    .reel-icon circle { stroke: var(--amber); fill: none; }
+
+    /* PROGRESS */
+    .progress-area {
+      position: absolute;
+      bottom: 70px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 20;
+      width: min(65vw, 380px);
+      opacity: 0;
+    }
+    .progress-meta {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 8px;
+      font-size: 0.48rem;
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      color: var(--silver);
+      opacity: 0.5;
+    }
+    .progress-track {
+      width: 100%;
+      height: 2px;
+      background: rgba(255,255,255,0.07);
+      position: relative;
+    }
+    .progress-track::before {
+      content: '';
+      position: absolute;
+      top: -6px;
+      left: 0; right: 0;
+      height: 4px;
+      background: repeating-linear-gradient(
+        90deg,
+        rgba(255,200,80,0.25) 0px, rgba(255,200,80,0.25) 1px,
+        transparent 1px, transparent 10px
+      );
+    }
+    .progress-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, var(--warm), var(--amber), var(--amber2));
+      box-shadow: 0 0 12px rgba(232,160,32,0.7), 0 0 28px rgba(232,160,32,0.3);
+      position: relative;
+    }
+    .progress-fill::after {
+      content: '';
+      position: absolute;
+      right: -2px; top: 50%;
+      transform: translateY(-50%);
+      width: 5px; height: 5px;
+      border-radius: 50%;
+      background: #fff8e0;
+      box-shadow: 0 0 8px 2px rgba(255,240,160,0.9);
+    }
+    .frame-count {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 0.75rem;
+      letter-spacing: 0.1em;
+      color: var(--amber);
+    }
+
+    /* GRAIN */
+    .grain {
+      position: fixed;
+      inset: -40%;
+      z-index: 40;
+      pointer-events: none;
+      opacity: 0.045;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 300 300' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.78' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+      background-size: 200px 200px;
+      mix-blend-mode: overlay;
+      animation: grainShift 0.12s steps(3) infinite;
+    }
+    @keyframes grainShift {
+      0%   { transform: translate(0,0); }
+      33%  { transform: translate(-4%,-3%); }
+      66%  { transform: translate(3%,4%); }
+      100% { transform: translate(-2%,2%); }
+    }
+
+    .vignette {
+      position: fixed;
+      inset: 0;
+      z-index: 35;
+      pointer-events: none;
+      background: radial-gradient(ellipse 72% 68% at 50% 50%, transparent 30%, rgba(0,0,0,0.82) 100%);
+    }
+
+    #dustCanvas {
+      position: absolute;
+      inset: 0;
+      z-index: 2;
+      pointer-events: none;
+      opacity: 0;
+    }
+
+    .flash {
+      position: fixed; inset: 0;
+      z-index: 50;
+      background: #fff8e0;
+      opacity: 0;
+      pointer-events: none;
+    }
+    .burn {
+      position: fixed; inset: 0;
+      z-index: 55;
+      background: radial-gradient(circle at 50% 50%, #ffe080 0%, #e8a020 30%, #0a0703 75%);
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: 0.01ms !important; }
+      #dustCanvas { display: none; }
+    }
+  </style>
+</head>
+<body>
+<div class="stage">
+  <div class="bg-wash"></div>
+  <div class="projector-beam"></div>
+  <canvas id="dustCanvas" aria-hidden="true"></canvas>
+
+  <!-- FILM STRIPS -->
+  <div class="filmstrip top" aria-hidden="true">
+    <div class="sprockets"><div class="sprocket-row" id="tR1"></div><div class="sprocket-row" id="tR2"></div></div>
+  </div>
+  <div class="filmstrip bottom" aria-hidden="true">
+    <div class="sprockets"><div class="sprocket-row" id="bR1"></div><div class="sprocket-row" id="bR2"></div></div>
+  </div>
+
+  <!-- HUD -->
+  <div class="leader" aria-hidden="true">
+    <div class="leader-count" id="leaderCount">8</div>
+    <div class="leader-label">Scene</div>
+  </div>
+  <div class="take-badge" aria-hidden="true">
+    <div class="take-line">Take</div>
+    <div class="take-num">01</div>
+  </div>
+
+  <!-- CLAPPERBOARD -->
+  <div class="clapper-wrap" id="clapper" aria-hidden="true">
+    <div class="clapper-body">
+      <div class="clapper-head">
+        <div class="clapper-stripe"></div>
+        <div class="clapper-stick"><div class="clapper-stick-inner"></div></div>
+      </div>
+      <div class="clapper-row"><span class="clapper-key">Production</span><span class="clapper-val">Dashreels</span></div>
+      <div class="clapper-row"><span class="clapper-key">Director</span><span class="clapper-val">You</span></div>
+      <div class="clapper-row"><span class="clapper-key">Scene</span><span class="clapper-val">001</span></div>
+      <div class="clapper-row"><span class="clapper-key">Format</span><span class="clapper-val">4K / 60fps</span></div>
+    </div>
+  </div>
+
+  <!-- LOGO -->
+  <div class="logo-stage" id="logoStage">
+    <div class="gate-frame" aria-hidden="true"></div>
+
+    <svg class="reel-icon" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <circle cx="24" cy="24" r="21" stroke-width="1.5" stroke-opacity="0.7"/>
+      <circle cx="24" cy="24" r="5"  stroke-width="1.5"/>
+      <circle cx="24" cy="10" r="3"  stroke-width="1.2" stroke-opacity="0.6"/>
+      <circle cx="24" cy="38" r="3"  stroke-width="1.2" stroke-opacity="0.6"/>
+      <circle cx="10" cy="24" r="3"  stroke-width="1.2" stroke-opacity="0.6"/>
+      <circle cx="38" cy="24" r="3"  stroke-width="1.2" stroke-opacity="0.6"/>
+      <circle cx="14.1" cy="14.1" r="3" stroke-width="1.2" stroke-opacity="0.6"/>
+      <circle cx="33.9" cy="33.9" r="3" stroke-width="1.2" stroke-opacity="0.6"/>
+      <circle cx="14.1" cy="33.9" r="3" stroke-width="1.2" stroke-opacity="0.6"/>
+      <circle cx="33.9" cy="14.1" r="3" stroke-width="1.2" stroke-opacity="0.6"/>
+    </svg>
+
+    <div style="position:relative">
+      <div class="logo-text" id="logoText">DASHREELS</div>
+      <div class="logo-shine" id="logoShine">DASHREELS</div>
+    </div>
+
+    <p class="logo-sub">Create &middot; Edit &middot; Publish</p>
+  </div>
+
+  <!-- PROGRESS -->
+  <div class="progress-area" aria-hidden="true">
+    <div class="progress-meta">
+      <span>Loading</span>
+      <span class="frame-count" id="frameCount">000</span>
+    </div>
+    <div class="progress-track">
+      <div class="progress-fill" id="progressFill"></div>
+    </div>
+  </div>
+</div>
+
+<div class="vignette" aria-hidden="true"></div>
+<div class="grain"    aria-hidden="true"></div>
+<div class="flash"    id="flash" aria-hidden="true"></div>
+<div class="burn"     id="burn"  aria-hidden="true"></div>
+
+<script>
+/* ── BUILD HOLES ── */
+(function() {
+  var count = Math.ceil(window.innerWidth / 36) + 6;
+  ['tR1','tR2','bR1','bR2'].forEach(function(id) {
+    var row = document.getElementById(id);
+    for (var i = 0; i < count; i++) {
+      var h = document.createElement('div');
+      h.className = 'hole';
+      row.appendChild(h);
+    }
+  });
+})();
+
+/* ── DUST CANVAS ── */
+(function() {
+  var canvas = document.getElementById('dustCanvas');
+  var ctx = canvas.getContext('2d');
+  var W, H, motes = [], raf;
+  function resize() { W = canvas.width = window.innerWidth; H = canvas.height = window.innerHeight; }
+  function spawn() {
+    motes = [];
+    for (var i = 0; i < 55; i++) {
+      motes.push({ x: Math.random()*W, y: Math.random()*H,
+        r: 0.4+Math.random()*1.4, alpha: 0.04+Math.random()*0.22,
+        vx: (Math.random()-0.5)*0.16, vy: -0.04-Math.random()*0.18,
+        hue: 35+Math.random()*25, t: Math.random()*Math.PI*2 });
+    }
+  }
+  function draw(ts) {
+    ctx.clearRect(0,0,W,H);
+    var grd = ctx.createRadialGradient(W*.5,0,10,W*.5,H*.5,H*.75);
+    grd.addColorStop(0,'rgba(255,220,100,0.04)');
+    grd.addColorStop(1,'transparent');
+    ctx.fillStyle = grd; ctx.fillRect(0,0,W,H);
+    motes.forEach(function(m,i) {
+      m.x+=m.vx; m.y+=m.vy; m.t+=0.03;
+      if(m.y<-4){m.y=H+4;m.x=Math.random()*W;}
+      if(m.x<-4)m.x=W+4; if(m.x>W+4)m.x=-4;
+      var flk = 0.7+0.3*Math.sin(m.t+i);
+      ctx.beginPath(); ctx.arc(m.x,m.y,m.r,0,Math.PI*2);
+      ctx.fillStyle='hsla('+m.hue+',70%,85%,'+(m.alpha*flk)+')'; ctx.fill();
+    });
+    raf = requestAnimationFrame(draw);
+  }
+  resize(); spawn();
+  window.addEventListener('resize',function(){resize();spawn();});
+  window.__startDust = function(){ canvas.style.opacity=1; raf=requestAnimationFrame(draw); };
+  window.__stopDust  = function(){ if(raf) cancelAnimationFrame(raf); };
+})();
+
+/* ── STRIPS ── */
+function startStrips(spd) {
+  document.querySelectorAll('.sprockets').forEach(function(el,i){
+    el.style.animation='stripScroll '+(spd+i*0.5)+'s linear infinite';
+    el.style.animationDirection=i%2===0?'normal':'reverse';
+  });
+}
+
+/* ── LEADER COUNTDOWN ── */
+function runLeaderCountdown(from, to, interval, onDone) {
+  var el = document.getElementById('leaderCount');
+  var n = from;
+  function tick() {
+    n--;
+    el.textContent = n;
+    gsap.fromTo(el,{scale:1.4,opacity:0.4},{scale:1,opacity:1,duration:0.15,ease:'expo.out'});
+    if (n > to) setTimeout(tick, interval);
+    else if (onDone) setTimeout(onDone, interval);
+  }
+  setTimeout(tick, interval);
+}
+
+/* ── FRAME COUNTER ── */
+var frameEl = document.getElementById('frameCount');
+var _frame = 0;
+function setFrame(v) {
+  _frame = Math.round(v);
+  frameEl.textContent = String(_frame).padStart(3,'0');
+}
+
+/* ── CLAPPER SLAM ── */
+function slamClapper(onDone) {
+  var stick = document.querySelector('.clapper-stick');
+  gsap.to(stick, {
+    rotation: 0, duration: 0.08, ease: 'power4.in',
+    onComplete: function() {
+      gsap.to('#flash',{opacity:0.9,duration:0.04,yoyo:true,repeat:1,
+        onComplete:function(){
+          gsap.to('#flash',{opacity:0,duration:0.18});
+          if(onDone) onDone();
+        }
+      });
+      gsap.to('.stage',{
+        x:6,y:-4,duration:0.04,yoyo:true,repeat:6,
+        onComplete:function(){ gsap.set('.stage',{x:0,y:0}); }
+      });
+    }
+  });
+}
+
+/* ── MASTER TIMELINE ── */
+window.addEventListener('load', function() {
+  var tl = gsap.timeline({ defaults: { ease: 'power3.out' } });
+
+  tl
+  // Boot
+  .call(function(){ window.__startDust(); startStrips(5); }, [], 0)
+  .to('.projector-beam', { opacity:1, duration:1.8, ease:'power2.inOut' }, 0)
+  .fromTo('.filmstrip.top',    {y:-52}, {y:0, duration:0.85, ease:'expo.out'}, 0)
+  .fromTo('.filmstrip.bottom', {y:52},  {y:0, duration:0.85, ease:'expo.out'}, 0.1)
+
+  // Leader HUD
+  .to('.leader',     {opacity:1, duration:0.4}, 0.3)
+  .to('.take-badge', {opacity:1, duration:0.5}, 0.5)
+  .call(function(){
+    runLeaderCountdown(8,1,260,function(){
+      gsap.to('.leader',{opacity:0,duration:0.3});
+    });
+  }, [], 0.4)
+
+  // Clapperboard drop
+  .fromTo('#clapper',
+    {opacity:0, y:-90, rotation:-8, scale:0.8},
+    {opacity:1, y:0,   rotation:0,  scale:1, duration:0.72, ease:'back.out(1.3)'},
+    0.7)
+
+  // Clapper SLAMS at 2.6s
+  .call(slamClapper, [], 2.6)
+
+  // Clapper exits
+  .to('#clapper', {opacity:0, y:60, scale:0.88, duration:0.45, ease:'power3.in'}, 2.75)
+
+  // Logo stage reveals
+  .to('#logoStage', {opacity:1, duration:0.5}, 2.95)
+  .to('.gate-frame', {opacity:1, duration:0.6}, 3.05)
+
+  // Reel icon spins in, keeps spinning
+  .to('.reel-icon', {
+    opacity:1, rotation:0, scale:1, duration:0.9, ease:'back.out(1.6)',
+    transformOrigin:'center center'
+  }, 3.05)
+  .to('.reel-icon', {
+    rotation:360, duration:7, repeat:-1, ease:'none',
+    transformOrigin:'center center'
+  }, 4.1)
+
+  // Logo text — projector gate open (scaleY reveal)
+  .fromTo('#logoText',
+    {scaleY:0, opacity:0, filter:'blur(10px)'},
+    {scaleY:1, opacity:1, filter:'blur(0px)',
+     duration:0.65, ease:'expo.out', transformOrigin:'bottom center'},
+    3.15)
+
+  // Shine sweep
+  .fromTo('#logoShine',
+    {backgroundPosition:'200% 0', opacity:0},
+    {backgroundPosition:'-80% 0', opacity:1,
+     duration:1.35, ease:'power2.inOut',
+     onComplete:function(){ gsap.set('#logoShine',{opacity:0}); }},
+    3.45)
+
+  // Tagline
+  .to('.logo-sub', {opacity:1, y:0, duration:0.65}, 3.65)
+
+  // Progress
+  .to('.progress-area', {opacity:1, duration:0.4}, 3.2)
+  .to('#progressFill', {
+    width:'100%', duration:2.8, ease:'power1.inOut',
+    onUpdate: function() {
+      var w = parseFloat(document.getElementById('progressFill').style.width)||0;
+      setFrame(w);
+    }
+  }, 3.2)
+
+  // Pre-exit — strips accelerate
+  .call(function(){ startStrips(22); }, [], 5.9)
+
+  // EXIT
+  .to(['#logoStage','.progress-area','.take-badge'],
+    {opacity:0, y:-28, duration:0.48, ease:'power3.in', stagger:0.05}, 6.05)
+
+  // Film burn
+  .to('#burn', {opacity:1, duration:0.5, ease:'power3.in'}, 6.35)
+  .to('#burn', {opacity:0, duration:0.32, ease:'power2.out'}, 6.85)
+
+  // Fade to dark
+  .to('.stage', {opacity:0, duration:0.4, ease:'power2.in',
+    onComplete: function() {
+      window.__stopDust();
+      // window.location.replace('app.html');
+    }
+  }, 7.1);
+});
+</script>
+</body>
+</html>

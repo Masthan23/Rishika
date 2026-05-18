@@ -626,6 +626,21 @@ function formatSheetDate(value) {
   }
 }
 
+function normalizeCaptureDate(value) {
+  const tz = Session.getScriptTimeZone();
+  if (!value) return Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
+  try {
+    if (value instanceof Date && !isNaN(value.getTime())) {
+      return Utilities.formatDate(value, tz, 'yyyy-MM-dd');
+    }
+    const raw = value.toString().trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+    const parsed = new Date(raw);
+    if (!isNaN(parsed.getTime())) return Utilities.formatDate(parsed, tz, 'yyyy-MM-dd');
+  } catch (e) {}
+  return '';
+}
+
 function getRollingDateSet(referenceDate, days) {
   const tz = Session.getScriptTimeZone();
   const ref = new Date(referenceDate);
@@ -1077,6 +1092,7 @@ function addEmployee(data) {
     if (hdr['password'] !== undefined) newRow[hdr['password']] = generatedPassword;
     if (hdr['mustchangepassword'] !== undefined) newRow[hdr['mustchangepassword']] = 'TRUE';
     if (hdr['joindate'] !== undefined) newRow[hdr['joindate']] = data.joinDate || '';
+    if (hdr['contractstartdate'] !== undefined) newRow[hdr['contractstartdate']] = data.contractStartDate || '';
     if (hdr['contractenddate'] !== undefined) newRow[hdr['contractenddate']] = data.contractEndDate || '';
     if (hdr['contracttotaldays'] !== undefined) newRow[hdr['contracttotaldays']] = data.contractTotalDays || '';
     if (hdr['noticeperiod'] !== undefined) newRow[hdr['noticeperiod']] = data.noticePeriod || '';
@@ -2337,14 +2353,14 @@ function checkLoginBeforeCutoff(data) {
 }
 
 function captureAbsentUsers(data) {
-  return recordAbsentEmployees();
+  return recordAbsentEmployees(data && (data.date || data.targetDate));
 }
 
 function handleRecordAbsent(data) {
-  return recordAbsentEmployees();
+  return recordAbsentEmployees(data && (data.date || data.targetDate));
 }
 
-function recordAbsentEmployees() {
+function recordAbsentEmployees(targetDate) {
   try {
     const ss = SpreadsheetApp.openById(SHEET_ID);
     ensureEmployeeSchema(ss);
@@ -2362,14 +2378,17 @@ function recordAbsentEmployees() {
     }
 
     const tz = Session.getScriptTimeZone();
-    const today = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
+    const captureDate = normalizeCaptureDate(targetDate);
+    if (!captureDate) {
+      return { success: false, message: 'Invalid absence capture date.' };
+    }
     const empRows = empSheet.getRange(2, 1, empSheet.getLastRow() - 1, empSheet.getLastColumn()).getValues();
     const eHdr = getEmpHeaders(empSheet);
 
     const presentEmails = new Set();
     const lastPresentByEmail = {};
     const recentAbsenceCounts = {};
-    const rollingWindowDates = getRollingDateSet(today, 5);
+    const rollingWindowDates = getRollingDateSet(captureDate, 5);
 
     if (attSheet && attSheet.getLastRow() > 1) {
       const attRows = attSheet.getRange(2, 1, attSheet.getLastRow() - 1, attSheet.getLastColumn()).getValues();
@@ -2380,9 +2399,9 @@ function recordAbsentEmployees() {
         const rowDate = formatSheetDate(attRows[i][attDateIndex]) || String(attRows[i][attDateIndex] || '').substring(0, 10);
         const email = normalizeEmail(attRows[i][attEmailIndex]);
         if (!email) continue;
-        if (rowDate === today) {
+        if (rowDate === captureDate) {
           presentEmails.add(email);
-        } else if (rowDate && rowDate < today) {
+        } else if (rowDate && rowDate < captureDate) {
           if (!lastPresentByEmail[email] || rowDate > lastPresentByEmail[email]) {
             lastPresentByEmail[email] = rowDate;
           }
@@ -2400,7 +2419,7 @@ function recordAbsentEmployees() {
 
         const fromDate = formatSheetDate(getValueByHeader(leaveRows[i], lHdr, 'fromdate', 6));
         const toDate = formatSheetDate(getValueByHeader(leaveRows[i], lHdr, 'todate', 7));
-        if (fromDate && toDate && today >= fromDate && today <= toDate) {
+        if (fromDate && toDate && captureDate >= fromDate && captureDate <= toDate) {
           onLeaveEmails.add(normalizeEmail(getValueByHeader(leaveRows[i], lHdr, 'email', 2)));
         }
       }
@@ -2413,7 +2432,7 @@ function recordAbsentEmployees() {
         const rowDate = formatSheetDate(existingAbsences[i][0]) || String(existingAbsences[i][0] || '').substring(0, 10);
         const email = normalizeEmail(existingAbsences[i][2]);
         if (!email) continue;
-        if (rowDate === today) {
+        if (rowDate === captureDate) {
           alreadyAbsent.add(email);
         }
         if (rollingWindowDates.has(rowDate)) {
@@ -2429,7 +2448,7 @@ function recordAbsentEmployees() {
       const joinDate = formatSheetDate(getValueByHeader(empRows[i], eHdr, 'joindate', -1));
       if (!email) continue;
       if (status !== 'active') continue;
-      if (joinDate && joinDate > today) continue;
+      if (joinDate && joinDate > captureDate) continue;
       if (presentEmails.has(email)) continue;
       if (onLeaveEmails.has(email)) continue;
       if (alreadyAbsent.has(email)) continue;
@@ -2438,7 +2457,7 @@ function recordAbsentEmployees() {
         getValueByHeader(empRows[i], eHdr, 'type', -1) || 'Permanent';
 
       absentRows.push([
-        today,
+        captureDate,
         getValueByHeader(empRows[i], eHdr, 'empid', 0),
         email,
         getValueByHeader(empRows[i], eHdr, 'name', 2),
@@ -2468,7 +2487,7 @@ function recordAbsentEmployees() {
       for (let i = 0; i < alertRows.length; i++) {
         const rowDate = formatSheetDate(getValueByHeader(alertRows[i], alertHdr, 'date', 0)) || '';
         const email = normalizeEmail(getValueByHeader(alertRows[i], alertHdr, 'email', 2));
-        if (rowDate === today && email) {
+        if (rowDate === captureDate && email) {
           existingAlertKeys.add(email + '|' + rowDate);
         }
       }
@@ -2490,7 +2509,7 @@ function recordAbsentEmployees() {
         const status = (getValueByHeader(empRows[i], eHdr, 'status', -1) || 'Active').toString().trim().toLowerCase();
         if (status !== 'active') continue;
         const joinDate = formatSheetDate(getValueByHeader(empRows[i], eHdr, 'joindate', -1));
-        if (joinDate && joinDate > today) continue;
+        if (joinDate && joinDate > captureDate) continue;
 
         let missingCount = recentAbsenceCounts[email] || 0;
         if (!alreadyAbsent.has(email)) {
@@ -2498,14 +2517,14 @@ function recordAbsentEmployees() {
         }
 
         if (missingCount >= 5) {
-          const alertKey = email + '|' + today;
+          const alertKey = email + '|' + captureDate;
           if (existingAlertKeys.has(alertKey)) continue;
 
           const employmentType = getValueByHeader(empRows[i], eHdr, 'employmenttype', -1) ||
             getValueByHeader(empRows[i], eHdr, 'type', -1) || 'Permanent';
 
           alertRows.push([
-            today,
+            captureDate,
             getValueByHeader(empRows[i], eHdr, 'empid', 0),
             email,
             getValueByHeader(empRows[i], eHdr, 'name', 2),
@@ -2532,7 +2551,7 @@ function recordAbsentEmployees() {
       alertSheet.getRange(startRow, 1, alertRows.length, MISSING_LOGIN_ALERT_HEADERS.length).setBackground('#fce8e6');
     }
 
-    return { success: true, recorded: absentRows.length, missingAlertsCreated: alertRows.length };
+    return { success: true, date: captureDate, recorded: absentRows.length, alreadyRecorded: alreadyAbsent.size, missingAlertsCreated: alertRows.length };
   } catch (err) {
     Logger.log('recordAbsentEmployees error: ' + err.toString());
     return { success: false, message: 'Error: ' + err.toString(), error: err.toString() };
