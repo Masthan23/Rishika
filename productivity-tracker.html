@@ -931,8 +931,14 @@
       if(isHome){
         sessionStorage.setItem('fromIndexPage','1');
       }else{
-        const key = dest==='admin.html' ? 'hrOk' : dest==='reporting-manager.html' ? 'repOk' : 'mgrOk';
-        sessionStorage.setItem(key,'1');
+        if(dest==='admin.html'){
+          sessionStorage.removeItem('hrOk');
+          sessionStorage.removeItem('hrUser');
+          sessionStorage.removeItem('hrUserName');
+        }else{
+          const key = dest==='reporting-manager.html' ? 'repOk' : 'mgrOk';
+          sessionStorage.setItem(key,'1');
+        }
         sessionStorage.setItem('fromIndexPage','1');
       }
     }catch{}
