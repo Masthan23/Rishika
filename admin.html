@@ -1950,6 +1950,12 @@
                     if(alertRows.length){alerts.push(...alertRows);lsSet(LS.ALERTS,alerts);}
                     return{success:true,date:targetDate,recorded:newRows.length,alreadyRecorded:already.size,missingAlertsCreated:alertRows.length};
                 }
+                case 'recordAbsentBulk':{
+                    let dates=[];try{dates=Array.isArray(data.dates)?data.dates:JSON.parse(data.dates||'[]')}catch{dates=String(data.dates||'').split(',')}
+                    let recorded=0,missingAlertsCreated=0,alreadyRecorded=0,failed=[];
+                    [...new Set(dates.map(d=>String(d||'').substring(0,10)).filter(Boolean))].forEach(date=>{const res=localFallback('recordAbsent',{date});if(!res.success){failed.push({date,message:res.message||'failed'});return}recorded+=Number(res.recorded||0);missingAlertsCreated+=Number(res.missingAlertsCreated||0);alreadyRecorded+=Number(res.alreadyRecorded||0);});
+                    return{success:failed.length===0,partial:failed.length>0,recorded,missingAlertsCreated,alreadyRecorded,failed};
+                }
                 case 'updateLeaveStatus':{
                     const rows=lsGet(LS.LV),i=rows.findIndex(l=>String(l.id)===String(data.id));
                     if(i<0)return{success:false,message:'Leave record not found'};
@@ -1991,35 +1997,41 @@
         const todayStr=()=>new Date().toISOString().split('T')[0];
         function getLeaveStatDate(leave){return safeParseDate(leave?.fromDate)||safeParseDate(leave?.appliedOn)||safeParseDate(leave?.toDate)}
         function normalizeEmpKey(val){return (val||'').toString().trim().toLowerCase();}
-        function getLeaveDayValue(leave){
-            const raw=Number(leave?.days);
-            if(Number.isFinite(raw)&&raw>0)return raw;
-            const from=safeParseDate(leave?.fromDate),to=safeParseDate(leave?.toDate||leave?.fromDate);
-            if(from&&to){const diff=Math.floor((to.setHours(0,0,0,0)-from.setHours(0,0,0,0))/86400000)+1;if(diff>0)return diff;}
-            return 1;
+        function startOfDay(d){const x=new Date(d);x.setHours(0,0,0,0);return x}
+        function countLeaveDaysInRange(leave,rangeStart,rangeEnd,joinDate){
+            let from=safeParseDate(leave?.fromDate),to=safeParseDate(leave?.toDate||leave?.fromDate);
+            if(!from&&!to)return 0;if(!from)from=to;if(!to)to=from;
+            from=startOfDay(from);to=startOfDay(to);if(from>to){const tmp=from;from=to;to=tmp}
+            let start=startOfDay(rangeStart),end=startOfDay(rangeEnd);
+            const joined=safeParseDate(joinDate);if(joined&&startOfDay(joined)>start)start=startOfDay(joined);
+            if(from>start)start=from;if(to<end)end=to;
+            if(start>end)return 0;
+            let days=0,cur=new Date(start);
+            while(cur<=end){if(cur.getDay()!==0)days++;cur.setDate(cur.getDate()+1)}
+            return days;
         }
         function getEmployeeMatchKeys(obj){
             return [`email:${normalizeEmpKey(obj?.email)}`,`id:${normalizeEmpKey(obj?.id||obj?.empId)}`,`name:${normalizeEmpKey(obj?.name)}`].filter(k=>!k.endsWith(':'));
         }
+        function findEmployeeForLeave(leave){
+            const keys=getEmployeeMatchKeys(leave);
+            return (allEmp||[]).find(emp=>getEmployeeMatchKeys(emp).some(k=>keys.includes(k)))||null;
+        }
         function buildEmployeeLeaveCountMap(){
-            const now=new Date(),map={};
+            const now=new Date(),yearStart=new Date(now.getFullYear(),0,1),yearEnd=new Date(now.getFullYear(),11,31),monthStart=new Date(now.getFullYear(),now.getMonth(),1),monthEnd=new Date(now.getFullYear(),now.getMonth()+1,0),map={};
             (allLv||[]).forEach(leave=>{
-                const d=getLeaveStatDate(leave);if(!d)return;
+                const d=getLeaveStatDate(leave);if(!d||d.getFullYear()!==now.getFullYear())return;
                 const keys=getEmployeeMatchKeys(leave);if(!keys.length)return;
-                const days=getLeaveDayValue(leave);
-                if(d.getFullYear()===now.getFullYear()){
-                    keys.forEach(key=>{
-                        if(!map[key])map[key]={month:0,year:0};
-                        map[key].year+=days;
-                        if(d.getMonth()===now.getMonth())map[key].month+=days;
-                    });
-                }
+                const emp=findEmployeeForLeave(leave),joinDate=emp?.joinDate||'';
+                const yearDays=countLeaveDaysInRange(leave,yearStart,yearEnd,joinDate),monthDays=countLeaveDaysInRange(leave,monthStart,monthEnd,joinDate);
+                if(!yearDays&&!monthDays)return;
+                keys.forEach(key=>{if(!map[key])map[key]={month:0,year:0};map[key].year+=yearDays;map[key].month+=monthDays;});
             });
             return map;
         }
         function updateEmployeeLeaveStats(){
-            const now=new Date();let monthCount=0,yearCount=0;
-            (allLv||[]).forEach(leave=>{const d=getLeaveStatDate(leave);if(!d)return;if(d.getFullYear()===now.getFullYear()){yearCount++;if(d.getMonth()===now.getMonth())monthCount++;}});
+            const now=new Date(),yearStart=new Date(now.getFullYear(),0,1),yearEnd=new Date(now.getFullYear(),11,31),monthStart=new Date(now.getFullYear(),now.getMonth(),1),monthEnd=new Date(now.getFullYear(),now.getMonth()+1,0);let monthCount=0,yearCount=0;
+            (allLv||[]).forEach(leave=>{const emp=findEmployeeForLeave(leave),joinDate=emp?.joinDate||'';yearCount+=countLeaveDaysInRange(leave,yearStart,yearEnd,joinDate);monthCount+=countLeaveDaysInRange(leave,monthStart,monthEnd,joinDate);});
             const monthEl=document.getElementById('empMonthLeaves'),yearEl=document.getElementById('empYearLeaves');
             if(monthEl)monthEl.textContent=monthCount;
             if(yearEl)yearEl.textContent=yearCount;
@@ -2112,14 +2124,9 @@
             const btn=document.getElementById('monitorSaveMissingBtn'),old=btn?btn.innerHTML:'';
             if(btn){btn.disabled=true;btn.innerHTML='Saving...'}
             try{
-                let recorded=0,alerts=0,already=0,failed=[];
-                for(const day of selectedDays){
-                    const res=await callAPI('recordAbsent',{date:day.date});
-                    if(!res.success){failed.push(`${fmtDate(day.date)}: ${res.message||'failed'}`);continue}
-                    recorded+=Number(res.recorded||0);
-                    alerts+=Number(res.missingAlertsCreated||0);
-                    already+=Number(res.alreadyRecorded||0);
-                }
+                const bulk=await callAPI('recordAbsentBulk',{dates:selectedDays.map(day=>day.date)});
+                const recorded=Number(bulk.recorded||0),alerts=Number(bulk.missingAlertsCreated||0),already=Number(bulk.alreadyRecorded||0);
+                const failed=(bulk.failed||[]).map(item=>`${fmtDate(item.date)}: ${item.message||'failed'}`);
                 const missingRes=await callAPI('getMissingLoginAlerts');
                 if(missingRes&&missingRes.success)allMissingLoginAlerts=missingRes.alerts||[];
                 applyLeaveMonitorRange(leaveMonitorSelectedDates[0]);
@@ -2168,10 +2175,20 @@
             document.addEventListener('click',e=>{if(!e.target.closest('.ms-wrap'))closeAllMS()});
         });
 
+        async function pingSheets(timeout=12000){
+            const ctrl=new AbortController(),timer=setTimeout(()=>ctrl.abort(),timeout);
+            try{const res=await fetch(`${SCRIPT_URL}?action=ping&_=${Date.now()}`,{signal:ctrl.signal,cache:'no-store'});clearTimeout(timer);const txt=await res.text();const json=JSON.parse(txt.replace(/^[^{[]*/,'').replace(/[^}\]]*$/,''));return !!json.success;}
+            catch{clearTimeout(timer);return false}
+        }
+
         async function checkConn(){
             const bar=document.getElementById('connBar');bar.innerHTML=`<div class="conn-bar conn-local"><div class="conn-dot"></div>Checking connection...</div>`;
-            try{const ctrl=new AbortController();setTimeout(()=>ctrl.abort(),5000);const res=await fetch(`${SCRIPT_URL}?action=ping`,{signal:ctrl.signal});const txt=await res.text();JSON.parse(txt.replace(/^[^{[]*/,'').replace(/[^}\]]*$/,''));isLive=true;bar.innerHTML=`<div class="conn-bar conn-live"><div class="conn-dot"></div>✅ Connected to Google Sheets</div>`;}
-            catch{isLive=false;bar.innerHTML=`<div class="conn-bar conn-err"><div class="conn-dot"></div>⚠️ Offline — Local mode active</div>`;}
+            const ok=await pingSheets() || await pingSheets(18000);
+            isLive=ok;
+            bar.innerHTML=ok
+                ? `<div class="conn-bar conn-live"><div class="conn-dot"></div>✅ Connected to Google Sheets</div>`
+                : `<div class="conn-bar conn-err"><div class="conn-dot"></div>⚠️ Offline — Local mode active</div>`;
+            updateModeUI();
         }
 
         async function doLogin(){
@@ -2443,7 +2460,9 @@
 
         function refreshDash(){
             document.getElementById('stTotalEmp').textContent=allEmp.length;const today=todayStr();const todayAtt=allAtt.filter(a=>(a.date||'').toString().substring(0,10)===today);
-            document.getElementById('stPresent').textContent=todayAtt.length;document.getElementById('stAbsent').textContent=Math.max(0,allEmp.length-todayAtt.length);document.getElementById('stPending').textContent=allLv.filter(l=>l.status==='Pending').length;
+            const expectedEmails=new Set(allEmp.filter(e=>isEmployeeExpectedOnDate(e,today)).map(e=>normalizeMonitorEmail(e.email)).filter(Boolean));
+            const presentEmails=new Set(todayAtt.map(a=>normalizeMonitorEmail(a.email)).filter(Boolean));
+            document.getElementById('stPresent').textContent=todayAtt.filter(a=>expectedEmails.has(normalizeMonitorEmail(a.email))).length;document.getElementById('stAbsent').textContent=Math.max(0,[...expectedEmails].filter(email=>!presentEmails.has(email)).length);document.getElementById('stPending').textContent=allLv.filter(l=>l.status==='Pending').length;
             updateEmployeeLeaveStats();
             buildContractsPanel();
             document.getElementById('dashAttBody').innerHTML=!todayAtt.length?`<tr><td colspan="9"><div class="empty"><div class="ei">📭</div><h3>No attendance today</h3></div></td></tr>`:todayAtt.map(a=>{const emp=allEmp.find(e=>e.email===a.email);const wm=emp?.workMode||a.workMode||'';return`<tr><td><div style="display:flex;align-items:center;gap:8px;"><div class="av">${ini(a.name||a.email)}</div><strong style="font-size:.84rem;">${a.name||'N/A'}</strong></div></td><td class="email-cell">${a.email}</td><td style="font-size:.81rem;">${a.role||'—'}</td><td><span class="badge bd-info">${a.department||'N/A'}</span></td><td>${getWorkModeBadge(wm)}</td><td class="manager-cell">${emp?.manager||'N/A'}</td><td style="font-size:.81rem;">${fmtDate(a.date)}</td><td style="font-weight:700;color:var(--p);font-size:.84rem;">${extractTime(a.checkIn)}</td><td><span class="badge bd-ok">✅ Present</span></td></tr>`;}).join('');
@@ -2588,7 +2607,14 @@
                 }
                 closeEmpModal();
                 toast('✅ Saved!',r.message,'ok');
-                await loadEmp();
+                if(isNewEmployee){
+                    const saved=allEmp.find(e=>(e.email||'').toLowerCase()===(r.employeeEmail||payload.email||'').toLowerCase());
+                    if(saved){saved.id=r.empId||r.id||saved.id;saved.password=r.password||saved.password;}
+                }
+                allEmpDirectory=allEmp.map(stripEmployeeForDirectory);
+                renderEmp();
+                populateProjDropdowns();
+                renderLeaveMonitor();
                 refreshDash();
                 buildReports();
                 buildContractsPanel();
@@ -2717,7 +2743,7 @@
             if(r.success){
                 const employeeMailSent=!r.notification||(r.notification.sent||[]).some(x=>String(x).startsWith('employee:'));
                 toast(status==='Approved'?'✅ Approved':status==='Rejected'?'❌ Rejected':status==='Revoked'?'🚫 Revoked':'🚫 Cancelled',r.message||`Leave ${status.toLowerCase()}`,employeeMailSent?'ok':'warn');
-                await loadAll();return
+                renderLeaves();refreshDash();renderLeaveMonitor();buildReports();return
             }
             Object.assign(lv,prev);renderLeaves();toast('❌ Sync Failed',r.message||'Could not update leave request','err');
         }

@@ -1086,10 +1086,16 @@
             try{const saved=sessionStorage.getItem('reportingSession');if(saved){const s=JSON.parse(saved);if(s.email&&s.role==='reporting'&&s.name){myEmail=s.email;myRole=s.role;myName=s.name;document.getElementById('loginPg').style.display='none';document.getElementById('mgrApp').classList.add('on');setTimeout(initApp,100);}}}catch{}
         });
 
+        async function pingSheets(timeout=12000){
+            const ctrl=new AbortController(),timer=setTimeout(()=>ctrl.abort(),timeout);
+            try{const res=await fetch(`${SCRIPT_URL}?action=ping&_=${Date.now()}`,{signal:ctrl.signal,cache:'no-store'});clearTimeout(timer);const txt=await res.text();const json=JSON.parse(txt.replace(/^[^{[]*/,'').replace(/[^}\]]*$/,''));return !!json.success;}
+            catch{clearTimeout(timer);return false}
+        }
+
         async function checkConn(){
             const bar=document.getElementById('connBar');bar.innerHTML=`<div class="conn-bar conn-local"><div class="conn-dot"></div></div>`;
-            try{const ctrl=new AbortController();setTimeout(()=>ctrl.abort(),5000);const res=await fetch(`${SCRIPT_URL}?action=ping`,{signal:ctrl.signal});const txt=await res.text();JSON.parse(txt.replace(/^[^{[]*/,'').replace(/[^}\]]*$/,''));isLive=true;bar.innerHTML=`<div class="conn-bar conn-live"><div class="conn-dot"></div></div>`;}
-            catch{isLive=false;bar.innerHTML=`<div class="conn-bar conn-err"><div class="conn-dot"></div></div>`;}
+            const ok=await pingSheets() || await pingSheets(18000);
+            isLive=ok;bar.innerHTML=ok?`<div class="conn-bar conn-live"><div class="conn-dot"></div></div>`:`<div class="conn-bar conn-err"><div class="conn-dot"></div></div>`;
         }
 
         function ticker(){const el=document.getElementById('mgrClk');if(el)el.textContent=new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',second:'2-digit'});}
@@ -1158,7 +1164,7 @@
         function getTodayData(){
             const today=todayStr();
             const todayTeamAtt=getLatestAttendanceRecords(myTeamAtt.filter(a=>(a.date||'').toString().substring(0,10)===today));
-            const onLeaveToday=myTeamLv.filter(l=>{if(l.status!=='Approved')return false;const f=safeDateStr(l.fromDate||l.from),t=safeDateStr(l.toDate||l.to);return f&&t&&today>=f&&today<=t;});
+            const onLeaveToday=myTeamLv.filter(l=>isLeaveActiveForExpectedEmployee(l,today));
             const presentEmails=new Set(todayTeamAtt.map(a=>a.email?.toLowerCase()));
             const onLeaveEmails=new Set(onLeaveToday.map(l=>l.email?.toLowerCase()));
             return{todayTeamAtt,onLeaveToday,presentEmails,onLeaveEmails};
@@ -1316,6 +1322,16 @@
             document.body.style.overflow='';
         }
         function handleDetailModalBg(e){if(e.target===document.getElementById('detailModalOv'))closeDetailModal();}
+        function getEmployeeStartDate(emp){return safeParseDate(emp?.joinDate)||new Date();}
+        function isEmployeeExpectedOnDate(emp,dateStr=todayStr()){return safeDateStr(getEmployeeStartDate(emp))<=dateStr;}
+        function isEmployeeExpectedToday(emp){return isEmployeeExpectedOnDate(emp,todayStr());}
+        function isLeaveActiveForExpectedEmployee(leave,dateStr=todayStr()){
+            if(leave.status!=='Approved')return false;
+            const emp=myTeam.find(e=>(e.email||'').toLowerCase()===(leave.email||'').toLowerCase());
+            if(emp&&!isEmployeeExpectedOnDate(emp,dateStr))return false;
+            const f=safeDateStr(leave.fromDate||leave.from),t=safeDateStr(leave.toDate||leave.to);
+            return !!(f&&t&&dateStr>=f&&dateStr<=t);
+        }
 
         async function loadAll(){
             dataLoaded=true;const sk=(cols)=>`<tr>${Array(cols).fill(0).map(()=>`<td><div class="skeleton" style="height:14px;border-radius:5px;"></div></td>`).join('')}</tr>`.repeat(5);
@@ -1358,10 +1374,10 @@
         function renderDashboard(){
             const today=todayStr();document.getElementById('stTeam').textContent=myTeam.length;
             const todayTeamAtt=getLatestAttendanceRecords(myTeamAtt.filter(a=>(a.date||'').toString().substring(0,10)===today));
-            const onLeaveToday=myTeamLv.filter(l=>{if(l.status!=='Approved')return false;const f=safeDateStr(l.fromDate||l.from),t=safeDateStr(l.toDate||l.to);return f&&t&&today>=f&&today<=t;});
+            const onLeaveToday=myTeamLv.filter(l=>isLeaveActiveForExpectedEmployee(l,today));
             const presentEmails=new Set(todayTeamAtt.map(a=>a.email?.toLowerCase()));
             const onLeaveEmails=new Set(onLeaveToday.map(l=>l.email?.toLowerCase()));
-            const absentCount=myTeam.filter(e=>!presentEmails.has(e.email?.toLowerCase())&&!onLeaveEmails.has(e.email?.toLowerCase())).length;
+            const absentCount=myTeam.filter(e=>isEmployeeExpectedToday(e)&&!presentEmails.has(e.email?.toLowerCase())&&!onLeaveEmails.has(e.email?.toLowerCase())).length;
             document.getElementById('stTodayPresent').textContent = presentEmails.size;
             document.getElementById('stTodayAbsent').textContent = absentCount;
             document.getElementById('stMissingAlerts').textContent = myMissingLoginAlerts.length;
@@ -1378,19 +1394,19 @@
             const presentEmails=new Set(todayAtt.map(a=>a.email?.toLowerCase()));
             const onLeaveEmails=new Set(onLeave.map(l=>l.email?.toLowerCase()));
             if(!myTeam.length){document.getElementById('todayStatusGrid').innerHTML=`<div class="empty" style="grid-column:1/-1"><div class="ei">👥</div><h3>No team members found</h3><p>HR must assign employees to you using your @dashverse.ai email.</p></div>`;return;}
-            document.getElementById('todayStatusGrid').innerHTML=myTeam.map(e=>{const email=e.email?.toLowerCase();let cls='ast-absent',label='Absent',icon='❌';if(presentEmails.has(email)){cls='ast-present';label='Present';icon='✅';}else if(onLeaveEmails.has(email)){cls='ast-leave';label='On Leave';icon='🏖️';}const rec=todayAtt.find(a=>a.email?.toLowerCase()===email);return`<div class="ast-card ${cls}"><div class="ast-name">${e.name}</div><div class="ast-role">${e.role||'—'} • ${e.department||'—'}</div><div class="ast-status"><div class="ast-dot"></div>${icon} ${label}</div>${rec?`<div class="ast-time">⏰ ${extractTime(rec.checkIn)}${rec.workMode?` • ${rec.workMode.includes('Home')?'🏠':rec.workMode==='Hybrid'?'🔄':'🏢'} ${rec.workMode}`:''}</div>`:''}</div>`;}).join('');
+            document.getElementById('todayStatusGrid').innerHTML=myTeam.filter(e=>isEmployeeExpectedToday(e)).map(e=>{const email=e.email?.toLowerCase();let cls='ast-absent',label='Absent',icon='❌';if(presentEmails.has(email)){cls='ast-present';label='Present';icon='✅';}else if(onLeaveEmails.has(email)){cls='ast-leave';label='On Leave';icon='🏖️';}const rec=todayAtt.find(a=>a.email?.toLowerCase()===email);return`<div class="ast-card ${cls}"><div class="ast-name">${e.name}</div><div class="ast-role">${e.role||'—'} • ${e.department||'—'}</div><div class="ast-status"><div class="ast-dot"></div>${icon} ${label}</div>${rec?`<div class="ast-time">⏰ ${extractTime(rec.checkIn)}${rec.workMode?` • ${rec.workMode.includes('Home')?'🏠':rec.workMode==='Hybrid'?'🔄':'🏢'} ${rec.workMode}`:''}</div>`:''}</div>`;}).join('');
         }
 
-        function renderTodayStatus(){const today=todayStr();const todayTeamAtt=getLatestAttendanceRecords(myTeamAtt.filter(a=>(a.date||'').toString().substring(0,10)===today));const onLeaveToday=myTeamLv.filter(l=>{if(l.status!=='Approved')return false;const f=safeDateStr(l.fromDate),t=safeDateStr(l.toDate);return f&&t&&today>=f&&today<=t;});renderTodayStatusGrid(todayTeamAtt,onLeaveToday);renderTodayFull();}
+        function renderTodayStatus(){const today=todayStr();const todayTeamAtt=getLatestAttendanceRecords(myTeamAtt.filter(a=>(a.date||'').toString().substring(0,10)===today));const onLeaveToday=myTeamLv.filter(l=>isLeaveActiveForExpectedEmployee(l,today));renderTodayStatusGrid(todayTeamAtt,onLeaveToday);renderTodayFull();}
 
         function renderTodayFull(){
             const today=todayStr();const filter=document.getElementById('todayFilter')?.value||'';
             const todayTeamAtt=getLatestAttendanceRecords(myTeamAtt.filter(a=>(a.date||'').toString().substring(0,10)===today));
             const presentEmails=new Set(todayTeamAtt.map(a=>a.email?.toLowerCase()));
-            const onLeaveEmails=new Set(myTeamLv.filter(l=>{if(l.status!=='Approved')return false;const f=safeDateStr(l.fromDate),t=safeDateStr(l.toDate);return f&&t&&today>=f&&today<=t;}).map(l=>l.email?.toLowerCase()));
+            const onLeaveEmails=new Set(myTeamLv.filter(l=>isLeaveActiveForExpectedEmployee(l,today)).map(l=>l.email?.toLowerCase()));
             const tb=document.getElementById('todayFullBody');
             if(!myTeam.length){tb.innerHTML=`<tr><td colspan="6"><div class="empty"><div class="ei">👥</div><h3>No team members</h3></div></td></tr>`;return;}
-            let filtered=myTeam;if(filter==='present')filtered=myTeam.filter(e=>presentEmails.has(e.email?.toLowerCase()));if(filter==='absent')filtered=myTeam.filter(e=>!presentEmails.has(e.email?.toLowerCase())&&!onLeaveEmails.has(e.email?.toLowerCase()));if(filter==='leave')filtered=myTeam.filter(e=>onLeaveEmails.has(e.email?.toLowerCase()));
+            let filtered=myTeam.filter(e=>isEmployeeExpectedToday(e));if(filter==='present')filtered=filtered.filter(e=>presentEmails.has(e.email?.toLowerCase()));if(filter==='absent')filtered=filtered.filter(e=>!presentEmails.has(e.email?.toLowerCase())&&!onLeaveEmails.has(e.email?.toLowerCase()));if(filter==='leave')filtered=filtered.filter(e=>onLeaveEmails.has(e.email?.toLowerCase()));
             if(!filtered.length){tb.innerHTML=`<tr><td colspan="6"><div class="empty"><div class="ei">🔍</div><h3>No records for this filter</h3></div></td></tr>`;return;}
             tb.innerHTML=filtered.map(e=>{const email=e.email?.toLowerCase();const attRec=todayTeamAtt.find(a=>a.email?.toLowerCase()===email);let statusCell=`<span class="badge" style="background:rgba(239,68,68,.15);color:#dc2626;border:1px solid rgba(239,68,68,.28);">❌ Absent</span>`;if(presentEmails.has(email))statusCell=`<span class="badge bd-ok">✅ Present</span>`;else if(onLeaveEmails.has(email))statusCell=`<span class="badge bd-pend">🏖️ On Leave</span>`;
                 return`<tr><td><div style="display:flex;align-items:center;gap:8px;"><div class="av">${ini(e.name)}</div><div><strong style="font-size:.86rem;">${e.name}</strong><div style="font-size:.69rem;color:var(--muted);word-break:break-all;">${e.email}</div></div></div></td><td style="font-size:.82rem;">${e.role||'—'}</td><td><span class="badge bd-info">${e.department||'—'}</span></td><td>${statusCell}</td><td style="font-weight:700;color:var(--mgac);">${attRec?extractTime(attRec.checkIn):'—'}${attRec?.workMode?`<div style="font-size:.65rem;color:var(--muted);margin-top:1px;">${attRec.workMode.includes('Home')?'🏠':attRec.workMode==='Hybrid'?'🔄':'🏢'} ${attRec.workMode}</div>`:''}</td><td style="font-size:.8rem;">${(e.currentProject||e.project||'—').split(',')[0].trim()}</td></tr>`;}).join('');
@@ -1657,3 +1673,4 @@
 </script>
 </body>
 </html>
+

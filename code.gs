@@ -125,6 +125,7 @@ function handleAction(action, data) {
     case 'deleteEmployee':    return deleteEmployee(data.email);
     case 'markAttendance':    return handleMarkAttendance(data);
     case 'recordAbsent':      return handleRecordAbsent(data);
+    case 'recordAbsentBulk':  return handleRecordAbsentBulk(data);
     case 'checkLoginBeforeCutoff': return checkLoginBeforeCutoff(data);
     case 'captureAbsentUsers': return captureAbsentUsers(data);
     case 'getAttendance':     return getAttendance(data.email);
@@ -158,6 +159,7 @@ function handleAction(action, data) {
 }
 
 function getBootstrapData(data) {
+  data = data || {};
   var include = (data.include || '')
     .toString()
     .split(',')
@@ -171,17 +173,215 @@ function getBootstrapData(data) {
     wants.leaves = true;
   }
 
+  var ss = openSpreadsheet();
   var out = { success: true };
-  if (wants.employees) out.employees = getEmployees().employees || [];
-  if (wants.employeesDirectory) out.employeesDirectory = getEmployeesDirectory().employees || [];
-  if (wants.attendance) out.attendance = getAllAttendance().attendance || [];
-  if (wants.leaves) out.leaves = getAllLeaves().leaves || [];
-  if (wants.projects) out.projects = getProjects().projects || [];
-  if (wants.managers) out.managers = getManagers().managers || [];
-  if (wants.hrProfiles) out.hrProfiles = getHRProfiles().profiles || [];
-  if (wants.contractAlerts) out.contractAlerts = getContractAlerts(data.email, data.role).alerts || [];
-  if (wants.missingLoginAlerts) out.missingLoginAlerts = getMissingLoginAlerts(data).alerts || [];
+  var employees = null;
+
+  if (wants.employees || wants.employeesDirectory || wants.leaves || wants.contractAlerts) {
+    employees = readEmployeesFast(ss);
+  }
+  if (wants.employees) out.employees = employees || [];
+  if (wants.employeesDirectory) {
+    out.employeesDirectory = (employees || []).map(function(emp) {
+      return buildEmployeeDirectoryObject(emp);
+    });
+  }
+  if (wants.attendance) out.attendance = readAttendanceFast(ss);
+  if (wants.leaves) out.leaves = readLeavesFast(ss, employees || readEmployeesFast(ss));
+  if (wants.projects) out.projects = readProjectsFast(ss);
+  if (wants.managers) out.managers = readManagersFast(ss);
+  if (wants.hrProfiles) out.hrProfiles = readHRProfilesFast(ss);
+  if (wants.contractAlerts) out.contractAlerts = buildContractAlertsFast(employees || [], data.email, data.role);
+  if (wants.missingLoginAlerts) out.missingLoginAlerts = readMissingLoginAlertsFast(ss, data);
   return out;
+}
+
+function readEmployeesFast(ss) {
+  var sheet = ss.getSheetByName('Employees');
+  if (!sheet || sheet.getLastRow() < 2) return [];
+  var lastRow = sheet.getLastRow();
+  var rows = sheet.getRange(2, 1, lastRow - 1, sheet.getLastColumn()).getValues();
+  var hdr = getEmpHeaders(sheet);
+  var employees = [];
+  for (var i = 0; i < rows.length; i++) {
+    if (rows[i][hdr['empid']] || rows[i][hdr['email']]) {
+      employees.push(buildEmployeeObject(rows[i], hdr, { includePassword: true }));
+    }
+  }
+  return employees;
+}
+
+function readAttendanceFast(ss) {
+  var sheet = ss.getSheetByName('Attendance');
+  if (!sheet || sheet.getLastRow() < 2) return [];
+  var lastRow = sheet.getLastRow();
+  var rows = sheet.getRange(2, 1, lastRow - 1, sheet.getLastColumn()).getValues();
+  var hdr = getAttHeaders(sheet);
+  var iRec = hdr['recordid'] !== undefined ? hdr['recordid'] : 0;
+  var iEId = hdr['empid'] !== undefined ? hdr['empid'] : 1;
+  var iMail = hdr['email'] !== undefined ? hdr['email'] : 2;
+  var iName = hdr['name'] !== undefined ? hdr['name'] : 3;
+  var iDept = hdr['department'] !== undefined ? hdr['department'] : 4;
+  var iProj = hdr['currentproject'] !== undefined ? hdr['currentproject'] : -1;
+  var iDate = hdr['date'] !== undefined ? hdr['date'] : 6;
+  var iCIn = hdr['checkintime'] !== undefined ? hdr['checkintime'] : 7;
+  var iLoc = hdr['location'] !== undefined ? hdr['location'] : 8;
+  var iSts = hdr['status'] !== undefined ? hdr['status'] : 9;
+  var iColor = hdr['attendancecolor'] !== undefined ? hdr['attendancecolor'] : -1;
+  var result = [];
+  for (var i = 0; i < rows.length; i++) {
+    if (rows[i][iRec] || rows[i][iMail]) {
+      result.push({
+        recordId: rows[i][iRec] || '',
+        empId: rows[i][iEId] || '',
+        email: rows[i][iMail] || '',
+        name: rows[i][iName] || '',
+        department: rows[i][iDept] || '',
+        currentProject: iProj >= 0 ? (rows[i][iProj] || '') : '',
+        date: formatSheetDate(rows[i][iDate]) || '',
+        checkIn: formatSheetTime(rows[i][iCIn]) || '',
+        location: rows[i][iLoc] || 'Office',
+        status: rows[i][iSts] || 'Present',
+        attendanceColor: iColor >= 0 ? (rows[i][iColor] || '') : ''
+      });
+    }
+  }
+  return result;
+}
+
+function readLeavesFast(ss, employees) {
+  var sheet = ss.getSheetByName('Leaves');
+  if (!sheet || sheet.getLastRow() < 2) return [];
+  var employeesByEmail = {};
+  (employees || []).forEach(function(emp) {
+    var key = normalizeEmail(emp.email);
+    if (key) employeesByEmail[key] = emp;
+  });
+  var lastRow = sheet.getLastRow();
+  var rows = sheet.getRange(2, 1, lastRow - 1, sheet.getLastColumn()).getValues();
+  var hdr = getLeaveHeaders(sheet);
+  var result = [];
+  for (var i = 0; i < rows.length; i++) {
+    if (getValueByHeader(rows[i], hdr, 'leaveid', 0)) {
+      var leave = buildLeaveObject(rows[i], hdr);
+      result.push(attachEmployeeManagersToLeave(leave, employeesByEmail[normalizeEmail(leave.email)]));
+    }
+  }
+  return result;
+}
+
+function readProjectsFast(ss) {
+  var sheet = ss.getSheetByName('Projects');
+  if (!sheet || sheet.getLastRow() < 2) return [];
+  var rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, 1).getValues();
+  var projects = [];
+  for (var i = 0; i < rows.length; i++) {
+    var val = rows[i][0] ? rows[i][0].toString().trim() : '';
+    if (val) projects.push(val);
+  }
+  return projects;
+}
+
+function readManagersFast(ss) {
+  var sheet = ss.getSheetByName('Managers');
+  if (!sheet || sheet.getLastRow() < 2) return [];
+  var rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn()).getValues();
+  var hdr = getManagerHeaders(sheet);
+  var managers = [];
+  for (var i = 0; i < rows.length; i++) {
+    if (getValueByHeader(rows[i], hdr, 'email', 3)) managers.push(buildManagerObject(rows[i], hdr));
+  }
+  return managers;
+}
+
+function readHRProfilesFast(ss) {
+  var sheet = ss.getSheetByName('HRProfiles');
+  if (!sheet || sheet.getLastRow() < 2) return [];
+  var rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn()).getValues();
+  var hdr = getHRHeaders(sheet);
+  var profiles = [];
+  for (var i = 0; i < rows.length; i++) {
+    if (getValueByHeader(rows[i], hdr, 'username', 1)) profiles.push(buildHRProfileObject(rows[i], hdr));
+  }
+  return profiles;
+}
+
+function readMissingLoginAlertsFast(ss, data) {
+  var sheet = ss.getSheetByName('MissingLoginAlerts');
+  if (!sheet || sheet.getLastRow() < 2) return [];
+  var rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn()).getValues();
+  var hdr = getHeaders(sheet);
+  var targetDate = data && data.date ? String(data.date).substring(0, 10) : '';
+  var alerts = [];
+  for (var i = 0; i < rows.length; i++) {
+    var rowDate = formatSheetDate(getValueByHeader(rows[i], hdr, 'date', 0)) || '';
+    var email = normalizeEmail(getValueByHeader(rows[i], hdr, 'email', 2));
+    if (!rowDate || !email) continue;
+    if (targetDate && rowDate !== targetDate) continue;
+    alerts.push({
+      date: rowDate,
+      empId: getValueByHeader(rows[i], hdr, 'employee id', 1),
+      email: email,
+      name: getValueByHeader(rows[i], hdr, 'name', 3),
+      department: getValueByHeader(rows[i], hdr, 'department', 4),
+      role: getValueByHeader(rows[i], hdr, 'role', 5),
+      reportingManager: getValueByHeader(rows[i], hdr, 'reporting manager', 6),
+      manager: getValueByHeader(rows[i], hdr, 'manager', 7),
+      project: getValueByHeader(rows[i], hdr, 'project', 8),
+      workMode: getValueByHeader(rows[i], hdr, 'work mode', 9),
+      employmentType: getValueByHeader(rows[i], hdr, 'employment type', 10),
+      status: getValueByHeader(rows[i], hdr, 'status', 11),
+      consecutiveMissingDays: parseInt(getValueByHeader(rows[i], hdr, 'consecutive missing days', 12)) || 0,
+      lastPresentDate: getValueByHeader(rows[i], hdr, 'last present date', 13),
+      alertMessage: getValueByHeader(rows[i], hdr, 'alert message', 14),
+      recordedOn: getValueByHeader(rows[i], hdr, 'recordedon', 15)
+    });
+  }
+  return alerts;
+}
+
+function buildContractAlertsFast(employees, email, role) {
+  var normalizedEmail = normalizeEmail(email);
+  if (!normalizedEmail) return [];
+  var normalizedRole = (role || 'manager').toString().trim().toLowerCase();
+  if (normalizedRole !== 'reporting') normalizedRole = 'manager';
+  var today = new Date();
+  today.setHours(0, 0, 0, 0);
+  var fiveDaysLater = new Date(today.getTime());
+  fiveDaysLater.setDate(fiveDaysLater.getDate() + 5);
+  return (employees || []).filter(function(emp) {
+    if (!employeeBelongsToRole(emp, normalizedEmail, normalizedRole)) return false;
+    var status = (emp.status || 'Active').toString().trim().toLowerCase();
+    if (status === 'inactive' || status === 'rejected') return false;
+    var endDate = parseContractDate(emp.contractEndDate);
+    if (!endDate) return false;
+    return endDate.getTime() >= today.getTime() && endDate.getTime() <= fiveDaysLater.getTime();
+  }).map(function(emp) {
+    var endDate = parseContractDate(emp.contractEndDate);
+    var daysLeft = Math.round((endDate.getTime() - today.getTime()) / 86400000);
+    return {
+      id: emp.id || '',
+      email: emp.email || '',
+      name: emp.name || '',
+      role: emp.role || '',
+      department: emp.department || '',
+      employmentType: emp.employmentType || emp.employeeType || emp.employment_type || 'Contract',
+      manager: emp.manager || '',
+      managerEmail: emp.managerEmail || '',
+      reportingManager: emp.reportingManager || '',
+      reportingManagerEmail: emp.reportingManagerEmail || '',
+      contractStartDate: emp.contractStartDate || '',
+      contractEndDate: formatSheetDate(endDate),
+      contractTotalDays: emp.contractTotalDays || '',
+      noticePeriod: emp.noticePeriod || '',
+      renewalNotes: emp.renewalNotes || '',
+      currentProject: emp.currentProject || '',
+      daysLeft: daysLeft
+    };
+  }).sort(function(a, b) {
+    if (a.daysLeft !== b.daysLeft) return a.daysLeft - b.daysLeft;
+    return String(a.name || '').localeCompare(String(b.name || ''));
+  });
 }
 
 function setupSheets() {
@@ -778,7 +978,7 @@ function getAttendanceColorInfo(dateValue) {
   const checkInDate = dateValue instanceof Date && !isNaN(dateValue.getTime()) ? dateValue : new Date();
   const tz = Session.getScriptTimeZone();
   const hour = parseInt(Utilities.formatDate(checkInDate, tz, 'H'), 10);
-  if (hour < 17) {
+  if (hour < 14) {
     return {
       attendanceColor: 'green',
       rowBackground: '#d4edda',
@@ -786,7 +986,7 @@ function getAttendanceColorInfo(dateValue) {
       timeFontColor: '#ffffff'
     };
   }
-  if (hour < 19) {
+  if (hour < 17) {
     return {
       attendanceColor: 'yellow',
       rowBackground: '#fff3cd',
@@ -2639,6 +2839,53 @@ function handleRecordAbsent(data) {
   return recordAbsentEmployees(data && (data.date || data.targetDate));
 }
 
+function handleRecordAbsentBulk(data) {
+  var dates = [];
+  try {
+    dates = Array.isArray(data.dates) ? data.dates : JSON.parse(data.dates || '[]');
+  } catch (e) {
+    dates = (data.dates || '').toString().split(',');
+  }
+  dates = dates.map(function(date) {
+    return String(date || '').substring(0, 10);
+  }).filter(Boolean);
+
+  var seen = {};
+  dates = dates.filter(function(date) {
+    if (seen[date]) return false;
+    seen[date] = true;
+    return true;
+  });
+  if (!dates.length) return { success: false, message: 'No dates selected' };
+
+  var results = [];
+  var recorded = 0;
+  var alerts = 0;
+  var already = 0;
+  var failed = [];
+  dates.forEach(function(date) {
+    var res = recordAbsentEmployees(date);
+    results.push({ date: date, result: res });
+    if (!res || !res.success) {
+      failed.push({ date: date, message: res && res.message ? res.message : 'failed' });
+      return;
+    }
+    recorded += Number(res.recorded || 0);
+    alerts += Number(res.missingAlertsCreated || 0);
+    already += Number(res.alreadyRecorded || 0);
+  });
+
+  return {
+    success: failed.length === 0,
+    partial: failed.length > 0,
+    recorded: recorded,
+    missingAlertsCreated: alerts,
+    alreadyRecorded: already,
+    failed: failed,
+    results: results
+  };
+}
+
 function recordAbsentEmployees(targetDate) {
   try {
     const ss = SpreadsheetApp.openById(SHEET_ID);
@@ -3000,6 +3247,36 @@ function countNonSundayDays(fromDateStr, toDateStr) {
   }
 }
 
+function countNonSundayDaysFromJoin(fromDateStr, toDateStr, joinDateStr) {
+  try {
+    var fromDate = new Date(fromDateStr);
+    var toDate = new Date(toDateStr || fromDateStr);
+    if (isNaN(fromDate.getTime()) || isNaN(toDate.getTime())) return 0;
+    fromDate.setHours(0, 0, 0, 0);
+    toDate.setHours(0, 0, 0, 0);
+    if (fromDate > toDate) {
+      var tmp = fromDate;
+      fromDate = toDate;
+      toDate = tmp;
+    }
+    if (joinDateStr) {
+      var joinDate = new Date(joinDateStr);
+      if (!isNaN(joinDate.getTime())) {
+        joinDate.setHours(0, 0, 0, 0);
+        if (joinDate > fromDate) fromDate = joinDate;
+      }
+    }
+    if (fromDate > toDate) return 0;
+    var count = 0;
+    for (var d = new Date(fromDate); d <= toDate; d.setDate(d.getDate() + 1)) {
+      if (d.getDay() !== 0) count++;
+    }
+    return count;
+  } catch (e) {
+    return 0;
+  }
+}
+
 function applyLeave(data) {
   const ss = SpreadsheetApp.openById(SHEET_ID);
   let sheet = ss.getSheetByName('Leaves');
@@ -3019,16 +3296,21 @@ function applyLeave(data) {
   let employee = null;
 
   try {
-    days = countNonSundayDays(data.fromDate, data.toDate);
-  } catch (e) {}
-
-  try {
     const empData = getEmployee(employeeEmail);
     if (empData.success && empData.employee) {
       employee = empData.employee;
     }
   } catch (lookupErr) {
     Logger.log('Employee lookup failed during applyLeave: ' + lookupErr.toString());
+  }
+
+  try {
+    days = countNonSundayDaysFromJoin(data.fromDate, data.toDate, employee ? employee.joinDate : '');
+    if (days < 1 && !employee) days = countNonSundayDays(data.fromDate, data.toDate);
+  } catch (e) {}
+
+  if (days < 1) {
+    return { success: false, message: 'Leave dates are before the employee joining date.' };
   }
 
   // Check if employee has completed leaves (already used all available leaves)
@@ -3045,7 +3327,11 @@ function applyLeave(data) {
       for (let i = 0; i < rows.length; i++) {
         const rowEmail = normalizeEmail(getValueByHeader(rows[i], hdr, 'email', 2));
         const rowStatus = normalizeLeaveStatus(getValueByHeader(rows[i], hdr, 'status', 10));
-        const rowDays = parseInt(getValueByHeader(rows[i], hdr, 'days', 8)) || 0;
+        const rowDays = countNonSundayDaysFromJoin(
+          getValueByHeader(rows[i], hdr, 'fromdate', 6),
+          getValueByHeader(rows[i], hdr, 'todate', 7),
+          employee ? employee.joinDate : ''
+        ) || 0;
         
         if (rowEmail === employeeEmail) {
           if (rowStatus === 'Approved') {

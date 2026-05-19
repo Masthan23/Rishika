@@ -874,8 +874,9 @@
         const colorPriority = { green: 0, yellow: 1, red: 2 };
         for (const rec of attDataArr) {
             const ds = safeDateStr(rec.date); if (ds !== today) continue;
-            let color = (rec.attendanceColor || '').trim().toLowerCase();
-            if (!['green','yellow','red'].includes(color)) color = getColorFromHour(parseTimeToHour(rec.checkIn));
+            const parsedHour = parseTimeToHour(rec.checkIn);
+            let color = parsedHour >= 0 ? getColorFromHour(parsedHour) : (rec.attendanceColor || '').trim().toLowerCase();
+            if (!['green','yellow','red'].includes(color)) color = 'green';
             if (best === null || colorPriority[color] < colorPriority[best]) best = color;
             if (best === 'green') break;
         }
@@ -904,8 +905,10 @@
     function getColorText(color) { return color === 'green' ? 'On Time' : color === 'yellow' ? 'Late' : 'Very Late'; }
     function getColorLabel(colorStr, checkInStr) {
         const c = (colorStr || '').trim().toLowerCase();
+        const parsedHour = parseTimeToHour(checkInStr);
+        if (parsedHour >= 0) return getColorFromHour(parsedHour);
         if (['green','yellow','red'].includes(c)) return c;
-        return getColorFromHour(parseTimeToHour(checkInStr));
+        return 'green';
     }
 
     // ===== DATA/CACHE =====
@@ -1384,7 +1387,6 @@
             }
             if (!canUseFirebaseAuth()) {
                 showAlert('loginAlerts', window.__firebaseCompatError || 'Firebase login is not configured right now. Please contact HR.', 'err');
-                toast('Login Failed', 'Firebase login is unavailable', 'err');
                 return;
             }
 
@@ -1393,7 +1395,6 @@
             if (!profile.success) {
                 showAlert('loginAlerts', profile.message, 'err');
                 shakeField(emailEl);
-                toast('Login Failed', profile.message, 'err');
                 return;
             }
 
@@ -1436,7 +1437,6 @@
                     showAlert('loginAlerts', err.message || 'Login failed.', 'err');
                 }
                 shakeField(passEl);
-                toast('Login Failed', err.message || 'Invalid credentials', 'err');
                 return;
             }
 
