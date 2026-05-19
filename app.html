@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#a21caf">
@@ -1024,6 +1025,13 @@
         }
     }
 
+    function clearEmployeeProfileCache(email, empId='') {
+        const keys = ['getEmployee_', 'getEmployeeById_'];
+        if (email) keys.push('getEmployee_' + email.toString().trim().toLowerCase());
+        if (empId) keys.push('getEmployeeById_' + empId.toString().trim().toUpperCase());
+        keys.forEach(k => CACHE.clear(k));
+    }
+
     let emp = null, attData = [], lvData = [], marked = false, projectList = [];
     let empSelectedProjects = new Set();
     let loginInFlight = false;
@@ -1396,6 +1404,11 @@
                 console.warn('Firebase login failed:', err);
                 if (code === 'auth/user-not-found') {
                     if (profile.employee && profile.employee.mustChangePassword) {
+                        const sheetPassword = (profile.employee.password || '').toString().trim();
+                        if (!sheetPassword || sheetPassword !== password) {
+                            showAlert('loginAlerts', 'Invalid email or password.', 'err');
+                            return;
+                        }
                         emp = profile.employee;
                         pendingFirstLoginEmail = profile.email;
                         pendingFirstLoginPassword = '';
@@ -1404,6 +1417,18 @@
                     }
                     showAlert('loginAlerts', 'Your employee profile exists, but your Firebase login is not ready yet. Please contact HR.', 'err');
                 } else if (code === 'auth/wrong-password' || code === 'auth/invalid-credential' || code === 'auth/invalid-login-credentials') {
+                    const sheetPassword = (profile.employee && profile.employee.password ? profile.employee.password : '').toString().trim();
+                    if (sheetPassword && sheetPassword === password) {
+                        try {
+                            await firebase.auth().sendPasswordResetEmail(profile.email);
+                            showAlert('loginAlerts', `Your sheet password is correct, but Firebase still has an older password. A Firebase reset email was sent to ${profile.email}. Please set your password from that email, then sign in again.`, 'warn');
+                            toast('Password Reset Sent', 'Check your email to sync Firebase login', 'warn');
+                        } catch (resetErr) {
+                            showAlert('loginAlerts', 'Your sheet password is correct, but Firebase password is out of sync. Please use Forgot Password or contact HR.', 'err');
+                            toast('Firebase Sync Needed', 'Use Forgot Password to reset Firebase login', 'err');
+                        }
+                        return;
+                    }
                     showAlert('loginAlerts', 'Invalid email or password.', 'err');
                 } else if (code === 'auth/network-request-failed') {
                     showAlert('loginAlerts', 'Unable to connect to Firebase. Please try again.', 'err');
@@ -1423,7 +1448,9 @@
                 return;
             }
 
-            callAPI('updateEmployee', { email: profile.email, password, mustChangePassword: false }).catch(() => {});
+            callAPI('updateEmployee', { email: profile.email, password, mustChangePassword: false })
+                .then(() => clearEmployeeProfileCache(profile.email, profile.employee && (profile.employee.id || profile.employee.empId)))
+                .catch(() => {});
 
             sessionStorage.setItem('empLoggedIn', emp.id || emp.email || '');
             sessionStorage.setItem('empData', JSON.stringify(emp));
@@ -1574,6 +1601,7 @@
                 showAlert('loginAlerts', res.message || 'Could not update employee profile.', 'err');
                 return;
             }
+            clearEmployeeProfileCache(profile.email, profile.employee && (profile.employee.id || profile.employee.empId));
 
             ov.dataset.forced = '';
             ov.querySelectorAll('.modal-close, .btn-ghost').forEach(b => b.style.display = '');
@@ -1585,7 +1613,10 @@
             ov.style.display = 'none';
             ov.dataset.mode = '';
 
-            emp = { ...(emp || profile.employee), mustChangePassword: false };
+            const freshProfile = await callAPI('getEmployee', { email: profile.email }, false).catch(() => null);
+            emp = freshProfile && freshProfile.success && freshProfile.employee
+                ? { ...freshProfile.employee, mustChangePassword: false }
+                : { ...(emp || profile.employee), password, mustChangePassword: false };
             sessionStorage.setItem('empLoggedIn', emp.id || emp.email || '');
             sessionStorage.setItem('empData', JSON.stringify(emp));
 
