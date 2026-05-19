@@ -1004,6 +1004,7 @@
                 case 'getEmployees': return {success:true,employees:lsGet(LS.EMP)};
                 case 'getAllAttendance': return {success:true,attendance:lsGet(LS.ATT)};
                 case 'getAllLeaves': return {success:true,leaves:lsGet(LS.LV)};
+                case 'getBootstrapData': return {success:true,employees:lsGet(LS.EMP),attendance:lsGet(LS.ATT),leaves:lsGet(LS.LV),missingLoginAlerts:[],contractAlerts:buildContractAlertsFromEmployees(lsGet(LS.EMP),data.email||myEmail,data.role||myRole,myName)};
                 case 'getContractAlerts': {
                     const employees=lsGet(LS.EMP);
                     const alerts=buildContractAlertsFromEmployees(employees,data.email||myEmail,data.role||myRole,myName);
@@ -1025,7 +1026,7 @@
         }
 
         async function callAPI(action, data={}, useCache=false) {
-            const cacheKey='mgr_'+action;
+            const cacheKey='mgr_'+action+'?'+JSON.stringify(Object.keys(data||{}).sort().reduce((o,k)=>{const v=data[k];if(v!==undefined&&v!==null&&v!=='')o[k]=v;return o;},{}));
             if(useCache){try{const c=sessionStorage.getItem(cacheKey);if(c){const p=JSON.parse(c);if(Date.now()-p.ts<90000)return p.d;}}catch{}}
             const params=new URLSearchParams({action});Object.entries(data).forEach(([k,v])=>{if(v!==undefined&&v!==null&&v!=='')params.set(k,String(v));});
             const ctrl=new AbortController();const timer=setTimeout(()=>ctrl.abort(),TIMEOUT_MS);
@@ -1320,18 +1321,27 @@
             dataLoaded=true;const sk=(cols)=>`<tr>${Array(cols).fill(0).map(()=>`<td><div class="skeleton" style="height:14px;border-radius:5px;"></div></td>`).join('')}</tr>`.repeat(5);
             document.getElementById('todayFullBody').innerHTML=sk(6);document.getElementById('allLvBody').innerHTML=sk(9);document.getElementById('attBody').innerHTML=sk(6);
             const today=todayStr();
-            const [er,ar,lr,cr,mr]=await Promise.all([
-                callAPI('getEmployees',{},true),
-                callAPI('getAllAttendance',{},true),
-                callAPI('getAllLeaves',{},true),
-                callAPI('getContractAlerts',{email:myEmail,role:myRole},false),
-                callAPI('getMissingLoginAlerts',{date:today},false)
-            ]);
-            if(er.success) allEmp = er.employees || [];
-            if(ar.success) allAtt = ar.attendance || [];
-            if(lr.success) allLv = lr.leaves || [];
-            if(mr && mr.success) myMissingLoginAlerts = mr.alerts || [];
-            myContractAlerts = cr && cr.success ? (cr.alerts || []) : buildContractAlertsFromEmployees(allEmp,myEmail,myRole,myName);
+            const br=await callAPI('getBootstrapData',{include:'employees,attendance,leaves,contractAlerts,missingLoginAlerts',email:myEmail,role:myRole,date:today},true);
+            if(br.success && (br.employees||br.attendance||br.leaves)){
+                allEmp = br.employees || [];
+                allAtt = br.attendance || [];
+                allLv = br.leaves || [];
+                myMissingLoginAlerts = br.missingLoginAlerts || [];
+                myContractAlerts = br.contractAlerts || buildContractAlertsFromEmployees(allEmp,myEmail,myRole,myName);
+            }else{
+                const [er,ar,lr,cr,mr]=await Promise.all([
+                    callAPI('getEmployees',{},true),
+                    callAPI('getAllAttendance',{},true),
+                    callAPI('getAllLeaves',{},true),
+                    callAPI('getContractAlerts',{email:myEmail,role:myRole},false),
+                    callAPI('getMissingLoginAlerts',{date:today},false)
+                ]);
+                if(er.success) allEmp = er.employees || [];
+                if(ar.success) allAtt = ar.attendance || [];
+                if(lr.success) allLv = lr.leaves || [];
+                if(mr && mr.success) myMissingLoginAlerts = mr.alerts || [];
+                myContractAlerts = cr && cr.success ? (cr.alerts || []) : buildContractAlertsFromEmployees(allEmp,myEmail,myRole,myName);
+            }
             filterMyTeam();renderDashboard();renderTeam();renderTodayStatus();renderPendingLeaves();renderAllLeaves();renderAtt();renderTodayFull();
             hideLoadingOverlay();
         }

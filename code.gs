@@ -118,6 +118,7 @@ function handleAction(action, data) {
     case 'getEmployees':      return getEmployees();
     case 'getAllEmployees':   return getEmployees();
     case 'getEmployeesDirectory': return getEmployeesDirectory();
+    case 'getBootstrapData':  return getBootstrapData(data);
     case 'addEmployee':       return addEmployee(data);
     case 'updateEmployee':    return updateEmployee(data);
     case 'resetEmployeePassword': return resetEmployeePassword(data);
@@ -154,6 +155,33 @@ function handleAction(action, data) {
     case 'deleteManager':     return deleteManager(data);
     default:                  return { success: false, message: 'Unknown action: ' + action };
   }
+}
+
+function getBootstrapData(data) {
+  var include = (data.include || '')
+    .toString()
+    .split(',')
+    .map(function(item) { return item.trim(); })
+    .filter(Boolean);
+  var wants = {};
+  include.forEach(function(item) { wants[item] = true; });
+  if (!include.length) {
+    wants.employees = true;
+    wants.attendance = true;
+    wants.leaves = true;
+  }
+
+  var out = { success: true };
+  if (wants.employees) out.employees = getEmployees().employees || [];
+  if (wants.employeesDirectory) out.employeesDirectory = getEmployeesDirectory().employees || [];
+  if (wants.attendance) out.attendance = getAllAttendance().attendance || [];
+  if (wants.leaves) out.leaves = getAllLeaves().leaves || [];
+  if (wants.projects) out.projects = getProjects().projects || [];
+  if (wants.managers) out.managers = getManagers().managers || [];
+  if (wants.hrProfiles) out.hrProfiles = getHRProfiles().profiles || [];
+  if (wants.contractAlerts) out.contractAlerts = getContractAlerts(data.email, data.role).alerts || [];
+  if (wants.missingLoginAlerts) out.missingLoginAlerts = getMissingLoginAlerts(data).alerts || [];
+  return out;
 }
 
 function setupSheets() {

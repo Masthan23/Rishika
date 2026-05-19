@@ -1,3 +1,0 @@
-/* Shared Dashverse UI hook.
-   Page-specific styles currently live inside each HTML file; this file keeps
-   the shared stylesheet request from producing a local 404 during development. */

@@ -1904,6 +1904,7 @@
                 case 'getEmployeesDirectory':return{success:true,employees:lsGet(LS.EMP).map(stripEmployeeForDirectory)};
                 case 'getEmployeeById':{const wanted=String(data.empId||data.id||'').trim().toUpperCase();const employee=lsGet(LS.EMP).find(e=>String(e.id||e.empId||'').trim().toUpperCase()===wanted);return employee?{success:true,employee}:{success:false,message:'Employee not found'};}
                 case 'getMissingLoginAlerts':{const target=String(data.date||'').substring(0,10);const rows=lsGet(LS.ALERTS);return{success:true,alerts:target?rows.filter(r=>String(r.date||'').substring(0,10)===target):rows};}
+                case 'getBootstrapData':{const employees=lsGet(LS.EMP),target=String(data.date||'').substring(0,10),alerts=lsGet(LS.ALERTS);return{success:true,employees,employeesDirectory:employees.map(stripEmployeeForDirectory),attendance:lsGet(LS.ATT),leaves:lsGet(LS.LV),projects:lsGet(LS.PROJ),managers:lsGet(LS.MGR),hrProfiles:lsGet(LS.HR),missingLoginAlerts:target?alerts.filter(r=>String(r.date||'').substring(0,10)===target):alerts};}
                 case 'addEmployee':{
                     const emps=lsGet(LS.EMP);
                     if(emps.find(e=>e.email?.toLowerCase()===(data.email||'').toLowerCase()))return{success:false,message:'Email already exists!'};
@@ -2207,26 +2208,37 @@
 
         async function loadAll(){
             dataLoaded=true;showSkeletons();
-            const today=todayStr();
-            const [er, edr, ar, lr, pr, mgrRes, missingRes, hrr] = await Promise.all([
-                callAPI('getEmployees', {}, true),
-                callAPI('getEmployeesDirectory', {}, true),
-                callAPI('getAllAttendance', {}, true),
-                callAPI('getAllLeaves', {}, true),
-                callAPI('getProjects', {}, true),
-                callAPI('getManagers', {}, true),
-                callAPI('getMissingLoginAlerts', {}, false),
-                callAPI('getHRProfiles', {}, true)
-            ]);
-            if (er.success) { allEmp = er.employees || [] }
-            if (edr.success) { allEmpDirectory = edr.employees || []; renderEmp() }
-            else if (er.success) { allEmpDirectory = (er.employees || []).map(stripEmployeeForDirectory); renderEmp() }
-            if (ar.success) { allAtt = ar.attendance || []; renderAtt() }
-            if (lr.success) { allLv = lr.leaves || []; renderLeaves() }
-            if (pr.success) { projectList = pr.projects || []; lsSet(LS.PROJ, projectList) }
-            if (mgrRes && mgrRes.success) { allManagers = mgrRes.managers || []; lsSet(LS.MGR, allManagers); renderManagerProfiles() }
-            if (missingRes && missingRes.success) { allMissingLoginAlerts = missingRes.alerts || []; }
-            if (hrr.success) { allHRProfiles = hrr.profiles || []; lsSet(LS.HR, allHRProfiles); renderHRProfiles() }
+            const br=await callAPI('getBootstrapData',{include:'employees,employeesDirectory,attendance,leaves,projects,managers,missingLoginAlerts,hrProfiles'},true);
+            if(br.success && (br.employees||br.attendance||br.leaves)){
+                allEmp = br.employees || [];
+                allEmpDirectory = br.employeesDirectory || allEmp.map(stripEmployeeForDirectory); renderEmp();
+                allAtt = br.attendance || []; renderAtt();
+                allLv = br.leaves || []; renderLeaves();
+                projectList = br.projects || []; lsSet(LS.PROJ, projectList);
+                allManagers = br.managers || []; lsSet(LS.MGR, allManagers); renderManagerProfiles();
+                allMissingLoginAlerts = br.missingLoginAlerts || [];
+                allHRProfiles = br.hrProfiles || []; lsSet(LS.HR, allHRProfiles); renderHRProfiles();
+            }else{
+                const [er, edr, ar, lr, pr, mgrRes, missingRes, hrr] = await Promise.all([
+                    callAPI('getEmployees', {}, true),
+                    callAPI('getEmployeesDirectory', {}, true),
+                    callAPI('getAllAttendance', {}, true),
+                    callAPI('getAllLeaves', {}, true),
+                    callAPI('getProjects', {}, true),
+                    callAPI('getManagers', {}, true),
+                    callAPI('getMissingLoginAlerts', {}, false),
+                    callAPI('getHRProfiles', {}, true)
+                ]);
+                if (er.success) { allEmp = er.employees || [] }
+                if (edr.success) { allEmpDirectory = edr.employees || []; renderEmp() }
+                else if (er.success) { allEmpDirectory = (er.employees || []).map(stripEmployeeForDirectory); renderEmp() }
+                if (ar.success) { allAtt = ar.attendance || []; renderAtt() }
+                if (lr.success) { allLv = lr.leaves || []; renderLeaves() }
+                if (pr.success) { projectList = pr.projects || []; lsSet(LS.PROJ, projectList) }
+                if (mgrRes && mgrRes.success) { allManagers = mgrRes.managers || []; lsSet(LS.MGR, allManagers); renderManagerProfiles() }
+                if (missingRes && missingRes.success) { allMissingLoginAlerts = missingRes.alerts || []; }
+                if (hrr.success) { allHRProfiles = hrr.profiles || []; lsSet(LS.HR, allHRProfiles); renderHRProfiles() }
+            }
             renderProjList();populateProjDropdowns();refreshDash();renderLeaveMonitor();buildReports();buildContractsPanel();updateModeUI();
             hideLoadingOverlay();
         }
