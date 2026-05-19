@@ -222,6 +222,20 @@
     .option-grid {
       display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px;
     }
+    .entries-wrap { display:flex; flex-direction:column; gap:16px; margin-top:6px; }
+    .work-entry {
+      border:1px solid var(--gb); border-radius:18px; padding:16px;
+      background:linear-gradient(145deg,rgba(255,255,255,.06),rgba(255,255,255,.025));
+    }
+    .entry-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:14px; }
+    .entry-title { font-size:.92rem; font-weight:800; color:var(--txt); }
+    .entry-sub { font-size:.73rem; color:var(--muted); margin-top:2px; }
+    .entry-remove {
+      padding:8px 12px; border-radius:12px; border:1px solid rgba(239,68,68,.25);
+      background:rgba(239,68,68,.1); color:var(--err); font-size:.76rem; font-weight:800;
+      cursor:pointer; transition:var(--tr);
+    }
+    .entry-remove:hover { transform:translateY(-2px); background:rgba(239,68,68,.16); }
     .choice {
       position:relative; display:flex; align-items:center; gap:10px;
       padding:14px; border-radius:16px; border:1px solid var(--gb);
@@ -424,8 +438,10 @@
                 <div class="hint">You can select one or multiple options.</div>
               </div>
             </div>
+            <div id="entriesWrap" class="entries-wrap"></div>
             <div class="btn-row">
-              <button class="btn btn-p" type="submit">Save Work Done Log</button>
+              <button class="btn btn-ghost" type="button" onclick="addWorkEntry()">Add Another Form</button>
+              <button class="btn btn-p" type="submit">Save Work Done Logs</button>
               <button class="btn btn-ghost" type="button" onclick="resetFormKeepProfile()">Clear Form</button>
             </div>
           </form>
@@ -450,6 +466,7 @@
     const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxyWYhkxufapNkEnnt33vZ3Q5tumCraRoq5PJGxFgJOY-KoUmxXOX4wte6n2zC820JRlQ/exec';
     const WORK_DONE_ALLOWED_ROLES = ['ai artist intern', 'ai artist', 'animation artist', 'animation artist - intern'];
     let currentSession = null;
+    let workEntryCounter = 1;
 
     function applyTheme(theme) {
       document.documentElement.setAttribute('data-theme', theme);
@@ -557,8 +574,133 @@
       }
     }
 
-    function getSelectedWorkTypes() {
-      return Array.from(document.querySelectorAll('input[name="workType"]:checked')).map(input => input.value);
+    function getSelectedWorkTypes(scope) {
+      const root = scope || document;
+      return Array.from(root.querySelectorAll('input[name="workType"]:checked')).map(input => input.value);
+    }
+
+    function getEntryWorkTypes(scope) {
+      return Array.from(scope.querySelectorAll('input[data-field="workType"]:checked')).map(input => input.value);
+    }
+
+    function getWorkTypeOptions(namePrefix) {
+      const options = [
+        ['New', 'Fresh work delivered'],
+        ['R1 Corrections', 'First revision round'],
+        ['R2 Corrections', 'Second revision round'],
+        ['R3 Corrections', 'Third revision round'],
+        ['Krock Corrections', 'Krock-based fixes']
+      ];
+      return options.map(option => `
+        <label class="choice">
+          <input type="checkbox" name="${namePrefix}WorkType" data-field="workType" value="${option[0]}" />
+          <div><div class="choice-title">${option[0]}</div><div class="choice-sub">${option[1]}</div></div>
+        </label>
+      `).join('');
+    }
+
+    function createWorkEntryHtml(entryNumber) {
+      return `
+        <div class="work-entry" data-entry-number="${entryNumber}">
+          <div class="entry-head">
+            <div>
+              <div class="entry-title">Form ${entryNumber}</div>
+              <div class="entry-sub">This form will create one sheet record.</div>
+            </div>
+            <button class="entry-remove" type="button" onclick="removeWorkEntry(this)">Remove</button>
+          </div>
+          <div class="form-grid">
+            <div class="fgrp">
+              <label class="flbl">Show Name</label>
+              <div class="iw">
+                <span class="iico">S</span>
+                <input class="finp" data-field="showName" placeholder="Enter show name" required />
+              </div>
+            </div>
+            <div class="fgrp">
+              <label class="flbl">Episode</label>
+              <div class="iw">
+                <span class="iico">E</span>
+                <input class="finp" data-field="episode" placeholder="Episode / sequence" required />
+              </div>
+            </div>
+            <div class="fgrp">
+              <label class="flbl">Total Images Done</label>
+              <div class="iw">
+                <span class="iico">#</span>
+                <input class="fnum" data-field="totalImagesDone" type="number" min="0" step="1" placeholder="0" required />
+              </div>
+            </div>
+            <div class="fgrp">
+              <label class="flbl">Total Animation Shots Done</label>
+              <div class="iw">
+                <span class="iico">#</span>
+                <input class="fnum" data-field="totalAnimationShotsDone" type="number" min="0" step="1" placeholder="0" required />
+              </div>
+            </div>
+            <div class="fgrp full">
+              <label class="flbl">Work Type</label>
+              <div class="option-grid">${getWorkTypeOptions('entry' + entryNumber)}</div>
+              <div class="hint">You can select one or multiple options.</div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function addWorkEntry() {
+      if (!ensureAccess()) return;
+      workEntryCounter += 1;
+      const wrap = document.getElementById('entriesWrap');
+      wrap.insertAdjacentHTML('beforeend', createWorkEntryHtml(workEntryCounter));
+      setFormEnabled(true);
+      renumberWorkEntries();
+    }
+
+    function removeWorkEntry(button) {
+      const entry = button.closest('.work-entry');
+      if (entry) entry.remove();
+      renumberWorkEntries();
+    }
+
+    function renumberWorkEntries() {
+      document.querySelectorAll('.work-entry').forEach((entry, index) => {
+        entry.dataset.entryNumber = String(index + 2);
+        const title = entry.querySelector('.entry-title');
+        if (title) title.textContent = `Form ${index + 2}`;
+      });
+    }
+
+    function collectWorkEntries() {
+      const entries = [{
+        formNumber: 1,
+        showName: document.getElementById('showName').value.trim(),
+        episode: document.getElementById('episode').value.trim(),
+        totalImagesDone: Number(document.getElementById('totalImagesDone').value || 0),
+        totalAnimationShotsDone: Number(document.getElementById('totalAnimationShotsDone').value || 0),
+        workTypes: getSelectedWorkTypes()
+      }];
+
+      document.querySelectorAll('.work-entry').forEach((entry, index) => {
+        entries.push({
+          formNumber: index + 2,
+          showName: (entry.querySelector('[data-field="showName"]')?.value || '').trim(),
+          episode: (entry.querySelector('[data-field="episode"]')?.value || '').trim(),
+          totalImagesDone: Number(entry.querySelector('[data-field="totalImagesDone"]')?.value || 0),
+          totalAnimationShotsDone: Number(entry.querySelector('[data-field="totalAnimationShotsDone"]')?.value || 0),
+          workTypes: getEntryWorkTypes(entry)
+        });
+      });
+      return entries;
+    }
+
+    function validateWorkEntries(entries) {
+      for (const entry of entries) {
+        if (!entry.showName || !entry.episode) return `Complete show name and episode in Form ${entry.formNumber}.`;
+        if (entry.totalImagesDone < 0 || entry.totalAnimationShotsDone < 0) return `Counts cannot be negative in Form ${entry.formNumber}.`;
+        if (!entry.workTypes.length) return `Select at least one work type in Form ${entry.formNumber}.`;
+      }
+      return '';
     }
 
     function renderHistory(logs) {
@@ -639,6 +781,8 @@
       document.getElementById('employeeName').value = sessionName;
       document.getElementById('employeeEmail').value = sessionEmail;
       document.getElementById('employeeId').value = sessionId;
+      document.getElementById('entriesWrap').innerHTML = '';
+      workEntryCounter = 1;
       refreshLiveStamp();
     }
 
@@ -694,44 +838,48 @@
     async function handleSubmit(event) {
       event.preventDefault();
       if (!ensureAccess()) return;
-      const workTypes = getSelectedWorkTypes();
-      if (!workTypes.length) {
-        setAlert('Select at least one work type option.', 'error');
+      const entries = collectWorkEntries();
+      const validationError = validateWorkEntries(entries);
+      if (validationError) {
+        setAlert(validationError, 'error');
         return;
       }
       refreshLiveStamp();
-      const payload = {
+      const basePayload = {
         employeeName: document.getElementById('employeeName').value.trim(),
         employeeEmail: document.getElementById('employeeEmail').value.trim(),
         employeeId: document.getElementById('employeeId').value.trim(),
-        logDateTime: document.getElementById('logDateTime').value,
-        showName: document.getElementById('showName').value.trim(),
-        episode: document.getElementById('episode').value.trim(),
-        totalImagesDone: Number(document.getElementById('totalImagesDone').value || 0),
-        totalAnimationShotsDone: Number(document.getElementById('totalAnimationShotsDone').value || 0),
-        workTypes
+        logDateTime: document.getElementById('logDateTime').value
       };
       showLoadingOverlay();
       try {
-        const res = await postAPI('submitWorkDoneLog', {
-          email: payload.employeeEmail,
-          employeeEmail: payload.employeeEmail,
-          employeeId: payload.employeeId,
-          employeeName: payload.employeeName,
-          showName: payload.showName,
-          episode: payload.episode,
-          totalImagesDone: payload.totalImagesDone,
-          totalAnimationShotsDone: payload.totalAnimationShotsDone,
-          workTypes,
-          logDateTime: payload.logDateTime
-        });
-        if (!res.success) throw new Error(res.message || 'Failed to save work done log.');
-        setAlert(res.message || 'Work done log saved successfully.', 'ok');
-        const name = payload.employeeName;
-        const email = payload.employeeEmail;
+        let savedCount = 0;
+        for (const entry of entries) {
+          const res = await postAPI('submitWorkDoneLog', {
+            email: basePayload.employeeEmail,
+            employeeEmail: basePayload.employeeEmail,
+            employeeId: basePayload.employeeId,
+            employeeName: basePayload.employeeName,
+            showName: entry.showName,
+            episode: entry.episode,
+            totalImagesDone: entry.totalImagesDone,
+            totalAnimationShotsDone: entry.totalAnimationShotsDone,
+            workTypes: entry.workTypes,
+            logDateTime: basePayload.logDateTime
+          });
+          if (!res.success) throw new Error(res.message || `Failed to save Form ${entry.formNumber}.`);
+          savedCount += 1;
+        }
+        setAlert(`${savedCount} work done log record${savedCount !== 1 ? 's' : ''} saved successfully.`, 'ok');
+        const name = basePayload.employeeName;
+        const email = basePayload.employeeEmail;
+        const employeeId = basePayload.employeeId;
         document.getElementById('workDoneForm').reset();
         document.getElementById('employeeName').value = name;
         document.getElementById('employeeEmail').value = email;
+        document.getElementById('employeeId').value = employeeId;
+        document.getElementById('entriesWrap').innerHTML = '';
+        workEntryCounter = 1;
         refreshLiveStamp();
         await loadHistory();
       } catch (error) {

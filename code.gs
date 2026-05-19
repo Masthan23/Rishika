@@ -52,6 +52,7 @@ const WORK_DONE_HEADERS = [
 
 const ABSENT_CAPTURE_HOUR = 18;
 const ABSENT_CAPTURE_MINUTE = 30;
+const WORK_DONE_REMINDER_START_HOUR = 18;
 
 function doGet(e) {
   try {
@@ -142,6 +143,9 @@ function handleAction(action, data) {
     case 'getMissingLoginAlerts': return getMissingLoginAlerts(data);
     case 'submitWorkDoneLog': return submitWorkDoneLog(data);
     case 'getWorkDoneLogs':   return getWorkDoneLogs(data);
+    case 'setupWorkDoneReminderTrigger': return ensureWorkDoneReminderTrigger();
+    case 'sendWorkDoneReminderEmails': return sendWorkDoneReminderEmails(data);
+    case 'debugWorkDoneReminder': return debugWorkDoneReminder(data);
     case 'validateProductivityTrackerProfile':
     case 'validateProductionManagerProfile': return validateProductivityTrackerProfile(data.email);
     case 'debugManagerProfile': return debugManagerProfile(data.email);
@@ -191,6 +195,7 @@ function setupSheets() {
   ensureMissingLoginAlertsSchema(ss);
   ensureDailyAbsentTrigger();
   ensureContractAlertTrigger();
+  ensureWorkDoneReminderTrigger();
   return { success: true, message: 'All sheets ready and daily absent capture is enabled!' };
 }
 
@@ -213,6 +218,22 @@ function ensureContractAlertTrigger() {
     .create();
 
   return { success: true, message: 'Daily contract alert trigger created' };
+}
+
+function ensureWorkDoneReminderTrigger() {
+  var existing = ScriptApp.getProjectTriggers().some(function(trigger) {
+    return trigger.getHandlerFunction() === 'sendWorkDoneReminderEmails';
+  });
+  if (existing) {
+    return { success: true, message: 'Hourly work done reminder trigger already exists' };
+  }
+
+  ScriptApp.newTrigger('sendWorkDoneReminderEmails')
+    .timeBased()
+    .everyHours(1)
+    .create();
+
+  return { success: true, message: 'Hourly work done reminder trigger created' };
 }
 
 function styleHeaderRow(sheet, headerCount, backgroundColor) {
@@ -1743,6 +1764,7 @@ function normalizeWorkDoneRole(value) {
     .toString()
     .trim()
     .toLowerCase()
+    .replace(/[_-]+/g, ' ')
     .replace(/\s+/g, ' ');
 }
 
@@ -1752,7 +1774,7 @@ function isAllowedWorkDoneRole(role) {
   return normalized === 'ai artist intern' ||
     normalized === 'ai artist' ||
     normalized === 'animation artist' ||
-    normalized === 'animation artist - intern';
+    normalized === 'animation artist intern';
 }
 
 function getWorkDoneAllowedWindow(now, tz) {
@@ -1799,6 +1821,197 @@ function getEmployeeProfileByEmail(ss, email) {
     }
   }
   return null;
+}
+
+function getWorkDoneSubmittedEmailSet(ss, targetDate) {
+  ensureWorkDoneSchema(ss);
+  var sheet = ss.getSheetByName('WorkDoneLogs');
+  var submitted = {};
+  if (!sheet || sheet.getLastRow() < 2) return submitted;
+
+  var hdr = getHeaders(sheet);
+  var rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn()).getValues();
+  for (var i = 0; i < rows.length; i++) {
+    var email = normalizeEmail(getValueByHeader(rows[i], hdr, 'email', 2));
+    if (!email) continue;
+
+    var logDate = getWorkDoneDateKey(getValueByHeader(rows[i], hdr, 'logdatetime', 12)) ||
+      getWorkDoneDateKey(getValueByHeader(rows[i], hdr, 'submittedat', 13));
+
+    if (logDate === targetDate) {
+      submitted[email] = true;
+    }
+  }
+  return submitted;
+}
+
+function getWorkDoneDateKey(value) {
+  if (!value) return '';
+  var formatted = formatSheetDate(value);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(formatted)) return formatted;
+  var raw = (value || '').toString().trim();
+  var match = raw.match(/^(\d{4}-\d{2}-\d{2})/);
+  return match ? match[1] : '';
+}
+
+function escapeEmailHtml(value) {
+  return (value || '').toString()
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function getWorkDoneReminderDecision(emp, submittedEmails) {
+  var email = normalizeEmail(emp && emp.email || '');
+  var status = (emp && emp.status || 'Active').toString().trim().toLowerCase();
+  var role = emp && emp.role || '';
+
+  if (!email) return { eligible: false, reason: 'Employee email is missing' };
+  if (status !== 'active') return { eligible: false, reason: 'Employee status is not Active' };
+  if (!isAllowedWorkEmail(email)) return { eligible: false, reason: 'Email domain is not allowed' };
+  if (!isAllowedWorkDoneRole(role)) return { eligible: false, reason: 'Role is not allowed for Work Done Log reminders: ' + role };
+  if (submittedEmails && submittedEmails[email]) return { eligible: false, reason: 'Work Done Log already submitted today' };
+
+  return { eligible: true, reason: 'Eligible for reminder' };
+}
+
+function sendWorkDoneReminderEmails(options) {
+  options = options || {};
+  var tz = Session.getScriptTimeZone();
+  var now = new Date();
+  var hour = parseInt(Utilities.formatDate(now, tz, 'H'), 10);
+  var today = Utilities.formatDate(now, tz, 'yyyy-MM-dd');
+  var targetEmail = normalizeEmail(options.email || options.employeeEmail || '');
+  var force = options.force === true || String(options.force || '').toLowerCase() === 'true';
+  var summary = { success: true, date: today, hour: hour, eligible: 0, submitted: 0, sent: 0, skipped: 0, issues: [] };
+
+  if (hour < WORK_DONE_REMINDER_START_HOUR && !force) {
+    summary.skipped = true;
+    summary.issues.push('Reminder window has not opened yet.');
+    return summary;
+  }
+
+  var ss = SpreadsheetApp.openById(SHEET_ID);
+  ensureEmployeeSchema(ss);
+  ensureWorkDoneSchema(ss);
+
+  var empRes = getEmployees();
+  if (!empRes.success) return empRes;
+
+  var submittedEmails = getWorkDoneSubmittedEmailSet(ss, today);
+  var props = PropertiesService.getScriptProperties();
+  var hourKey = Utilities.formatDate(now, tz, 'yyyyMMddHH');
+  var employees = empRes.employees || [];
+
+  employees.forEach(function(emp) {
+    var email = normalizeEmail(emp.email || '');
+    if (targetEmail && email !== targetEmail) {
+      summary.skipped += 1;
+      return;
+    }
+
+    var decision = getWorkDoneReminderDecision(emp, submittedEmails);
+    if (!decision.eligible) {
+      if (submittedEmails[email]) summary.submitted += 1;
+      else summary.skipped += 1;
+      if (targetEmail) summary.issues.push(email + ': ' + decision.reason);
+      return;
+    }
+
+    summary.eligible += 1;
+    if (submittedEmails[email]) {
+      summary.submitted += 1;
+      return;
+    }
+
+    var propKey = ['workDoneReminder', today, hourKey, email].join(':');
+    if (props.getProperty(propKey) && !force) {
+      summary.skipped += 1;
+      return;
+    }
+
+    try {
+      MailApp.sendEmail({
+        to: email,
+        subject: 'Reminder: Submit your Work Done Log for ' + today,
+        htmlBody: buildWorkDoneReminderEmail(emp, today)
+      });
+      props.setProperty(propKey, String(now.getTime()));
+      summary.sent += 1;
+    } catch (err) {
+      summary.issues.push(email + ': ' + err.toString());
+    }
+  });
+
+  return summary;
+}
+
+function debugWorkDoneReminder(data) {
+  data = data || {};
+  var tz = Session.getScriptTimeZone();
+  var now = new Date();
+  var hour = parseInt(Utilities.formatDate(now, tz, 'H'), 10);
+  var today = Utilities.formatDate(now, tz, 'yyyy-MM-dd');
+  var targetEmail = normalizeEmail(data.email || data.employeeEmail || '');
+  var ss = SpreadsheetApp.openById(SHEET_ID);
+  ensureEmployeeSchema(ss);
+  ensureWorkDoneSchema(ss);
+
+  var submittedEmails = getWorkDoneSubmittedEmailSet(ss, today);
+  var empRes = getEmployees();
+  if (!empRes.success) return empRes;
+
+  var triggerExists = ScriptApp.getProjectTriggers().some(function(trigger) {
+    return trigger.getHandlerFunction() === 'sendWorkDoneReminderEmails';
+  });
+
+  var employees = (empRes.employees || [])
+    .filter(function(emp) {
+      return !targetEmail || normalizeEmail(emp.email || '') === targetEmail;
+    })
+    .map(function(emp) {
+      var email = normalizeEmail(emp.email || '');
+      var decision = getWorkDoneReminderDecision(emp, submittedEmails);
+      return {
+        email: email,
+        name: emp.name || '',
+        role: emp.role || '',
+        normalizedRole: normalizeWorkDoneRole(emp.role || ''),
+        status: emp.status || 'Active',
+        submittedToday: !!submittedEmails[email],
+        eligible: decision.eligible,
+        reason: decision.reason
+      };
+    });
+
+  return {
+    success: true,
+    date: today,
+    hour: hour,
+    reminderWindowOpen: hour >= WORK_DONE_REMINDER_START_HOUR,
+    triggerExists: triggerExists,
+    targetEmail: targetEmail,
+    employeesChecked: employees.length,
+    employees: employees
+  };
+}
+
+function buildWorkDoneReminderEmail(emp, today) {
+  var name = escapeEmailHtml(emp && emp.name ? emp.name : 'there');
+  var role = escapeEmailHtml(emp && emp.role ? emp.role : 'Artist');
+  return '<div style="font-family:Arial,sans-serif;max-width:580px;margin:0 auto;padding:24px;background:#f8f7ff;color:#1f1433;border-radius:14px;border:1px solid #ddd6fe;">'
+    + '<h2 style="margin:0 0 10px;color:#6d28d9;">Work Done Log Reminder</h2>'
+    + '<p>Hi ' + name + ',</p>'
+    + "<p>This is your hourly reminder to submit today's Work Done Log. The form is open from 6:00 PM onward.</p>"
+    + '<div style="background:#ffffff;border:1px solid #ede9fe;border-radius:10px;padding:14px 16px;margin:16px 0;">'
+    + '<p style="margin:0 0 6px;"><strong>Date:</strong> ' + today + '</p>'
+    + '<p style="margin:0;"><strong>Role:</strong> ' + role + '</p>'
+    + '</div>'
+    + '<p style="color:#5b5270;font-size:13px;">You will stop receiving this reminder after your first Work Done Log submission for today.</p>'
+    + '<p style="color:#5b5270;font-size:13px;margin-top:18px;">AttendPro System | Do not reply to this email</p>'
+    + '</div>';
 }
 
 function submitWorkDoneLog(data) {

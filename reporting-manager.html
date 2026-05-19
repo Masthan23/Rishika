@@ -99,16 +99,117 @@
         .lgo h1 { font-size:1.8rem; font-weight:900; color:var(--txt) }
         .lgo h1 span { color:var(--mgac) }
         .lgo p { color:var(--muted); font-size:.85rem; margin-top:4px }
-        .role-tabs { display:flex; gap:0; background:transparent; border:none; border-radius:0; padding:0; margin-bottom:22px }
-        .role-tab { flex:1; min-height:112px; padding:16px 14px 14px; text-align:center; cursor:pointer; font-size:.8rem; font-weight:700; transition:var(--tr-3d); color:var(--txt); border:1px solid rgba(96,165,250,.18); background:
-            linear-gradient(155deg,rgba(59,130,246,.18) 0%,rgba(29,78,216,.12) 55%,rgba(0,0,0,.05) 100%);
-            touch-action:manipulation; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:5px; clip-path:polygon(0 0,calc(100% - 22px) 0,100% 22px,100% 100%,0 100%); box-shadow:0 18px 32px rgba(15,23,42,.22), inset 0 1px 0 rgba(255,255,255,.05); position:relative; overflow:hidden }
-        .role-tab .rt-ic { font-size:1.3rem }
-        .role-tab .rt-lbl { font-size:.84rem; letter-spacing:.02em }
-        .role-tab .rt-sub { font-size:.64rem; opacity:.76; text-transform:uppercase; letter-spacing:.08em }
-        .role-tab.on { border-color:rgba(96,165,250,.38); box-shadow:0 24px 46px rgba(37,99,235,.22), inset 0 1px 0 rgba(255,255,255,.08); }
-        .role-tab::before { content:''; position:absolute; inset:0; background:linear-gradient(130deg,rgba(255,255,255,.12),transparent 34%,rgba(96,165,250,.1) 64%,transparent 100%); pointer-events:none; }
-        .role-tab:active { transform:scale(.97) }
+        /* ── NEW ACCESS BADGE CARD ── */
+        .access-badge {
+            position: relative;
+            width: 100%;
+            border-radius: 14px;
+            overflow: hidden;
+            margin-bottom: 18px;
+            background: linear-gradient(135deg, rgba(30,58,120,.55) 0%, rgba(15,30,80,.7) 60%, rgba(8,16,50,.85) 100%);
+            border: 1px solid rgba(147,197,253,.22);
+            box-shadow: 0 8px 24px rgba(0,0,0,.28), 0 1px 0 rgba(255,255,255,.07) inset;
+            backdrop-filter: blur(18px);
+            display: flex;
+            align-items: center;
+            padding: 13px 16px;
+            gap: 14px;
+        }
+        [data-theme="light"] .access-badge {
+            background: linear-gradient(135deg, rgba(219,234,254,.9) 0%, rgba(199,210,254,.85) 60%, rgba(224,231,255,.9) 100%);
+            border-color: rgba(96,165,250,.35);
+            box-shadow: 0 4px 16px rgba(96,165,250,.15), 0 1px 0 rgba(255,255,255,.9) inset;
+        }
+        .access-badge::before {
+            content: '';
+            position: absolute;
+            left: 0; top: 0; bottom: 0;
+            width: 4px;
+            background: linear-gradient(180deg, #3b82f6, #818cf8, #38bdf8);
+            background-size: 100% 200%;
+            animation: abStripeShift 3s linear infinite;
+        }
+        @keyframes abStripeShift { 0%{background-position:0% 0%} 100%{background-position:0% 200%} }
+        .ab-left { flex-shrink: 0; padding-left: 4px; }
+        .ab-hologram {
+            width: 42px; height: 42px;
+            border-radius: 11px;
+            background: linear-gradient(135deg, #1d4ed8, #6366f1, #0ea5e9);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1.2rem;
+            box-shadow: 0 4px 14px rgba(59,130,246,.45), 0 0 0 1px rgba(255,255,255,.15) inset;
+            position: relative;
+            overflow: hidden;
+            flex-shrink: 0;
+        }
+        .ab-hologram::after {
+            content: '';
+            position: absolute; inset: 0;
+            background: linear-gradient(120deg, rgba(255,255,255,.25) 0%, transparent 50%);
+            pointer-events: none;
+        }
+        .ab-hologram-shine {
+            position: absolute; top: -40%; left: -40%;
+            width: 180%; height: 180%;
+            background: conic-gradient(from 0deg, transparent 0%, rgba(255,255,255,.15) 25%, transparent 50%);
+            animation: abHoloSpin 4s linear infinite;
+        }
+        @keyframes abHoloSpin { to { transform: rotate(360deg) } }
+        .ab-info { flex: 1; min-width: 0; }
+        .ab-role-label {
+            font-size: .63rem; font-weight: 800; letter-spacing: 1.5px;
+            text-transform: uppercase;
+            color: #93c5fd;
+            opacity: .8;
+        }
+        [data-theme="light"] .ab-role-label { color: #1d4ed8 }
+        .ab-role-name {
+            font-size: .95rem; font-weight: 900;
+            color: #f0f8ff;
+            line-height: 1.2;
+        }
+        [data-theme="light"] .ab-role-name { color: #172554 }
+        .ab-role-sub {
+            font-size: .68rem;
+            color: rgba(147,197,253,.7);
+            display: flex; align-items: center; gap: 4px;
+            margin-top: 2px;
+        }
+        [data-theme="light"] .ab-role-sub { color: #3b82f6 }
+        .ab-role-sub::before {
+            content: '';
+            display: inline-block;
+            width: 5px; height: 5px;
+            border-radius: 50%;
+            background: #38bdf8;
+            box-shadow: 0 0 5px #38bdf8;
+            animation: blink 1.4s infinite;
+            flex-shrink: 0;
+        }
+        .ab-right-chips {
+            display: flex; flex-direction: column; gap: 5px;
+            align-items: flex-end;
+            flex-shrink: 0;
+        }
+        .ab-chip {
+            display: inline-flex; align-items: center; gap: 4px;
+            font-size: .62rem; font-weight: 700;
+            padding: 3px 9px;
+            border-radius: 50px;
+            background: rgba(96,165,250,.12);
+            border: 1px solid rgba(96,165,250,.22);
+            color: #93c5fd;
+            white-space: nowrap;
+        }
+        [data-theme="light"] .ab-chip { background: rgba(59,130,246,.1); border-color: rgba(59,130,246,.28); color: #1e40af }
+        .ab-chip-dot { width:5px; height:5px; border-radius:50%; background:currentColor; opacity:.6 }
+        /* legacy kept but unused */
+        .role-tabs { display:none }
+        .role-tab { display:none }
+        .ab-stripe { display:none }
+        .ab-body { display:none }
+        .ab-chips { display:none }
+        .ab-badge-id { display:none }
         .conn-bar { display:flex; align-items:center; gap:8px; font-size:.73rem; padding:7px 13px; border-radius:50px; margin-bottom:14px; width:fit-content }
         .conn-live { background:rgba(96,165,250,.14); border:1px solid rgba(96,165,250,.3); color:#2563eb }
         .conn-local { background:rgba(245,158,11,.12); border:1px solid rgba(245,158,11,.3); color:#d97706 }
@@ -326,11 +427,13 @@
         .bd-info { background:rgba(59,130,246,.15); color:#2563eb; border:1px solid rgba(59,130,246,.28) }
         .bd-pur  { background:rgba(167,139,250,.15); color:#7c3aed; border:1px solid rgba(167,139,250,.28) }
         .bd-tl   { background:rgba(96,165,250,.12); color:var(--mgac); border:1px solid rgba(96,165,250,.25) }
+        .bd-warn { background:rgba(245,158,11,.15); color:#d97706; border:1px solid rgba(245,158,11,.28) }
         [data-theme="dark"] .bd-ok   { color:#bfdbfe }
         [data-theme="dark"] .bd-pend { color:#f59e0b }
         [data-theme="dark"] .bd-err  { color:#ef4444 }
         [data-theme="dark"] .bd-info { color:#60a5fa }
         [data-theme="dark"] .bd-pur  { color:#a78bfa }
+        [data-theme="dark"] .bd-warn { color:#fbbf24 }
 
         .toast-box { position:fixed; top:72px; right:12px; z-index:9999; display:flex; flex-direction:column; gap:8px; max-width:calc(100vw - 24px) }
         .toast { background:var(--card); backdrop-filter:blur(22px); border:1px solid var(--gb); border-radius:var(--rs); padding:11px 14px; min-width:220px; max-width:290px; display:flex; align-items:center; gap:10px; box-shadow:var(--sh); animation:tin .3s ease; cursor:pointer; position:relative; overflow:hidden }
@@ -471,6 +574,40 @@
         }
         @media(max-width:360px) { .att-status-grid { grid-template-columns:1fr } }
 
+        /* ── HORIZONTAL ROLE CARDS ── */
+        .hcard-row { display:flex; gap:10px; margin-bottom:20px; }
+        .hcard {
+            flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center;
+            gap:6px; padding:14px 10px;
+            border-radius:14px;
+            background:rgba(255,255,255,.05);
+            border:1px solid rgba(147,197,253,.14);
+            text-align:center;
+            position:relative; overflow:hidden;
+            transition:all .25s ease;
+        }
+        [data-theme="light"] .hcard { background:rgba(255,255,255,.7); border-color:rgba(96,165,250,.2); }
+        .hcard-active {
+            background:linear-gradient(135deg,rgba(59,130,246,.22),rgba(99,102,241,.18));
+            border-color:rgba(96,165,250,.45);
+            box-shadow:0 6px 20px rgba(59,130,246,.2);
+        }
+        [data-theme="light"] .hcard-active { background:linear-gradient(135deg,rgba(219,234,254,.95),rgba(199,210,254,.9)); border-color:rgba(96,165,250,.5); }
+        .hcard-active::after {
+            content:''; position:absolute; bottom:0; left:0; right:0; height:3px;
+            background:linear-gradient(90deg,#3b82f6,#818cf8);
+            border-radius:0 0 14px 14px;
+        }
+        .hcard-icon { font-size:1.4rem; line-height:1; }
+        .hcard-title { font-size:.82rem; font-weight:800; color:var(--txt); }
+        .hcard-sub { font-size:.65rem; color:var(--muted); }
+        .hcard-live {
+            position:absolute; top:8px; right:8px;
+            width:6px; height:6px; border-radius:50%;
+            background:#38bdf8; box-shadow:0 0 6px #38bdf8;
+            animation:blink 1.4s infinite;
+        }
+
     </style>
 </head>
 <body>
@@ -544,18 +681,20 @@
                 <p>Reporting Manager Portal</p>
             </div>
             <div id="connBar"></div>
-            <div style="margin-bottom:18px;">
-                <label class="flbl">Reporting Manager Access</label>
-                <div class="role-tabs">
-                    <button class="role-tab on" id="rt-reporting" type="button">
-                        <span class="rt-ic">📊</span><span class="rt-lbl">Rep. Manager</span><span class="rt-sub">Reporting team</span>
-                    </button>
+            <div class="hcard-row">
+                <div class="hcard hcard-active">
+                    <div class="hcard-icon">👔</div>
+                    <div class="hcard-body">
+                        <div class="hcard-title">Reporting Manager</div>
+                        <div class="hcard-sub">Full Team</div>
+                    </div>
+                    <div class="hcard-live"></div>
                 </div>
+
             </div>
-            <div class="domain-note">🌐 <div><strong>Company domain required.</strong> Your email must match the reportingManagerEmail field in employee records.</div></div>
             <div id="loginAlert"></div>
             <div class="fgrp">
-                <label class="flbl">Work Email Address (@dashverse.ai / @dashversemail.com / @dashtoon.com)</label>
+                <label class="flbl">Work Email</label>
                 <div class="iw"><span class="iico">📧</span><input type="email" class="finp" id="mgrEmail" placeholder="your.email@dashverse.ai" autocomplete="email" autocapitalize="none" autocorrect="off" spellcheck="false" inputmode="email"/></div>
             </div>
             <div class="fgrp">
@@ -660,8 +799,8 @@
                             <div class="st-n" id="stTodayAbsent">—</div>
                             <div class="st-l">Absent Today</div>
                         </div>
-                        <div class="stc or" title="Employees missing login 5+ days">
-                            <span class="stc-click-hint">info</span>
+                        <div class="stc or" onclick="openDetailModal('missing-logins')" title="Click to see employees missing login 5+ days">
+                            <span class="stc-click-hint">tap to view →</span>
                             <div class="st-ic">⚠️</div>
                             <div class="st-n" id="stMissingAlerts">—</div>
                             <div class="st-l">Missing 5+ Days</div>
@@ -985,14 +1124,14 @@
             document.body.style.overflow = '';
         }
 
-        function logout(){sessionStorage.removeItem('reportingSession');clearCache();dataLoaded=false;document.getElementById('loginPg').style.display='flex';document.getElementById('mgrApp').classList.remove('on');document.getElementById('mgrEmail').value='';document.getElementById('mgrPass').value='';myEmail='';myRole='';myName='';allEmp=[];allAtt=[];allLv=[];myTeam=[];myTeamAtt=[];myTeamLv=[];myContractAlerts=[];checkConn();}
+        function logout(){sessionStorage.removeItem('reportingSession');clearCache();dataLoaded=false;document.getElementById('loginPg').style.display='flex';document.getElementById('mgrApp').classList.remove('on');document.getElementById('mgrEmail').value='';document.getElementById('mgrPass').value='';myEmail='';myRole='';myName='';allEmp=[];allAtt=[];allLv=[];myTeam=[];myTeamAtt=[];myTeamLv=[];myContractAlerts=[];myMissingLoginAlerts=[];checkConn();}
 
         function goPortal(dest, isHome){
             try{
                 if(isHome){
                     sessionStorage.setItem('fromIndexPage','1');
                 }else{
-                    sessionStorage.setItem('mgrOk','1');
+                    sessionStorage.setItem(dest==='reporting-manager.html'?'repOk':'mgrOk','1');
                     sessionStorage.setItem('fromIndexPage','1');
                 }
             }catch{}
@@ -1150,6 +1289,21 @@
                 countEl.textContent=myContractAlerts.length;
                 body.innerHTML=renderContractAlertList(myContractAlerts,'No contracts are ending within 5 days.');
             }
+            else if(type==='missing-logins'){
+                modal.classList.add('absent-modal');
+                iconEl.textContent='⚠️';titleEl.textContent='Missing Login 5+ Days';
+                countEl.textContent=myMissingLoginAlerts.length;
+                body.innerHTML=myMissingLoginAlerts.length?`<div class="dm-emp-list">${myMissingLoginAlerts.map(a=>`<div class="dm-emp-item">
+                    <div class="dm-av" style="background:linear-gradient(135deg,#f59e0b,#dc2626);">${ini(a.name||a.email)}</div>
+                    <div class="dm-info">
+                        <div class="dm-name">${a.name||'N/A'}</div>
+                        <div class="dm-role">${a.role||'—'} • ${a.department||'—'}</div>
+                        <div class="dm-meta">Missing days: ${a.consecutiveMissingDays||0}${a.lastPresentDate?` • Last present: ${fmtDate(a.lastPresentDate)}`:''}</div>
+                        <div style="font-size:.67rem;color:var(--muted);margin-top:2px;">${a.email||''}</div>
+                    </div>
+                    <div class="dm-badge-col"><span class="badge bd-warn">⚠️ Alert</span></div>
+                </div>`).join('')}</div>`:`<div class="dm-empty"><div class="de-ic">✅</div><p>No reporting team members have missed login for 5+ days today.</p></div>`;
+            }
 
             document.getElementById('detailModalOv').classList.add('on');
             document.body.style.overflow='hidden';
@@ -1186,6 +1340,7 @@
             myTeam=allEmp.filter(e=>{if(myRole==='manager'){const mE=(e.managerEmail||'').trim().toLowerCase(),mN=(e.manager||'').trim().toLowerCase();return mE===emailLow||mN===emailLow||mN===nameLow;}if(myRole==='reporting'){const rE=(e.reportingManagerEmail||'').trim().toLowerCase(),rN=(e.reportingManager||'').trim().toLowerCase();return rE===emailLow||rN===emailLow||rN===nameLow;}return false;});
             const teamEmails=new Set(myTeam.map(e=>e.email?.toLowerCase()));
             myTeamAtt=allAtt.filter(a=>teamEmails.has(a.email?.toLowerCase()));myTeamLv=allLv.filter(l=>teamEmails.has(l.email?.toLowerCase()));
+            myMissingLoginAlerts=myMissingLoginAlerts.filter(a=>teamEmails.has((a.email||'').toLowerCase()));
             const cnt=myTeam.length;document.getElementById('sbTeamCount').textContent=`Team: ${cnt} member${cnt!==1?'s':''}`;
         }
 
@@ -1234,7 +1389,8 @@
             const srch=(document.getElementById('teamSrch')?.value||'').toLowerCase();const filtered=myTeam.filter(e=>!srch||`${e.name} ${e.email} ${e.role||''} ${e.department||''}`.toLowerCase().includes(srch));
             document.getElementById('teamCount').textContent=`${myTeam.length} member${myTeam.length!==1?'s':''}`;
             if(!myTeam.length){document.getElementById('teamGrid').innerHTML=`<div class="empty" style="grid-column:1/-1"><div class="ei">👥</div><h3>No team members found</h3><p>Ask HR to enter your email <strong>${myEmail}</strong> in the <strong>${myRole==='reporting'?'Reporting Manager Email':'Manager Email'}</strong> field of each employee.</p></div>`;document.getElementById('teamAlerts').innerHTML=`<div class="alert al-info">ℹ️ No team members assigned. HR must enter your email <strong>${myEmail}</strong> in the ${myRole==='reporting'?'Reporting Manager Email':'Manager Email'} field.</div>`;return;}
-            document.getElementById('teamAlerts').innerHTML=myContractAlerts.length?`<div class="alert al-warn">⚠️ ${myContractAlerts.length} team contract${myContractAlerts.length!==1?'s are':' is'} ending within 5 days. Open the dashboard contract card to review them.</div>`:'';
+            const missingAlertHtml = myMissingLoginAlerts.length ? `<div class="alert al-err">⚠️ ${myMissingLoginAlerts.length} reporting team member${myMissingLoginAlerts.length!==1?'s have':' has'} missed login for 5+ days today.</div>` : '';
+            document.getElementById('teamAlerts').innerHTML=(myContractAlerts.length?`<div class="alert al-warn">⚠️ ${myContractAlerts.length} team contract${myContractAlerts.length!==1?'s are':' is'} ending within 5 days. Open the dashboard contract card to review them.</div>`:'') + missingAlertHtml;
             if(!filtered.length){document.getElementById('teamGrid').innerHTML=`<div class="empty" style="grid-column:1/-1"><div class="ei">🔍</div><h3>No matching members</h3></div>`;return;}
             const today=todayStr();const presentEmails=new Set(myTeamAtt.filter(a=>(a.date||'').toString().substring(0,10)===today).map(a=>a.email?.toLowerCase()));
             const onLeaveEmails=new Set(myTeamLv.filter(l=>{if(l.status!=='Approved')return false;const f=safeDateStr(l.fromDate),t=safeDateStr(l.toDate);return f&&t&&today>=f&&today<=t;}).map(l=>l.email?.toLowerCase()));

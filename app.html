@@ -1529,11 +1529,13 @@
             const currentEmail = (currentUser && currentUser.email ? currentUser.email : '').toString().trim().toLowerCase();
             const ov = document.getElementById('passwordModalOv');
             const wasForced = ov.dataset.forced === '1';
+            let createdFirebaseUser = false;
 
             if (!currentUser || currentEmail !== profile.email) {
                 if (wasForced && profile.employee && profile.employee.mustChangePassword) {
                     try {
                         await firebase.auth().createUserWithEmailAndPassword(profile.email, password);
+                        createdFirebaseUser = true;
                     } catch (firebaseErr) {
                         const code = (firebaseErr.code || '').toString();
                         if (code === 'auth/email-already-in-use') {
@@ -1555,7 +1557,7 @@
                     showAlert('loginAlerts', 'Unable to verify your Firebase login. Please try again.', 'err');
                     return;
                 }
-                if (!wasForced || !profile.employee || !profile.employee.mustChangePassword) {
+                if (!createdFirebaseUser) {
                     await authUser.updatePassword(password);
                 }
             } catch (firebaseErr) {
@@ -1567,7 +1569,7 @@
                 throw firebaseErr;
             }
 
-            const res = await callAPI('updateEmployee', { email: profile.email, mustChangePassword: false });
+            const res = await callAPI('updateEmployee', { email: profile.email, password, mustChangePassword: false });
             if (!res.success) {
                 showAlert('loginAlerts', res.message || 'Could not update employee profile.', 'err');
                 return;
