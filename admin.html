@@ -906,7 +906,7 @@
                                     <input type="text" class="finp" id="pwdResetNewPassword" readonly placeholder="No password generated yet" />
                                 </div>
                                 <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;">
-                                    <button class="btn btn-ok btn-sm" id="pwdResetGenerateBtn" onclick="generateAndSavePassword()">Generate & Update Sheet</button>
+                                    <button class="btn btn-ok btn-sm" id="pwdResetGenerateBtn" onclick="generateAndSavePassword()">Generate & Sync Firebase</button>
                                     <button class="btn btn-ghost btn-sm" onclick="copyPasswordReset()">Copy Password</button>
                                     <span style="color:var(--muted);font-size:.85rem;">This will generate a new password and save it to the employee record in the sheet.</span>
                                 </div>
@@ -1705,7 +1705,7 @@
 
             const cachedEmployee = findEmployeeForPasswordReset(empId, email);
             const currentPassword = (pwdResetEmployee.password || (cachedEmployee && cachedEmployee.password) || '').toString();
-            const payload = { password: newPassword, mustChangePassword: true };
+            const payload = { mustChangePassword: true };
             if (email) payload.email = email;
             if (empId) payload.empId = empId;
 
@@ -1716,7 +1716,7 @@
             if (email) {
                 if (!currentPassword) {
                     btn.disabled = false;
-                    btn.textContent = 'Generate & Update Sheet';
+                    btn.textContent = 'Generate & Sync Firebase';
                     setPwdResetAlert('Could not read the current stored password. Refresh employees and try again, or ask the employee to use Forgot Password.', 'err');
                     return;
                 }
@@ -1733,7 +1733,7 @@
                         : (firebaseResult.message || 'Could not sync the Firebase password.');
                     setPwdResetAlert(firebaseMessage, 'err');
                     btn.disabled = false;
-                    btn.textContent = 'Generate & Update Sheet';
+                    btn.textContent = 'Generate & Sync Firebase';
                     return;
                 }
             }
@@ -1746,14 +1746,14 @@
 
             if (!result.success) {
                 btn.disabled = false;
-                btn.textContent = 'Generate & Update Sheet';
-                setPwdResetAlert(result.message || 'Firebase was updated, but the sheet password could not be saved. Try again or ask the employee to use Forgot Password.', 'err');
+                btn.textContent = 'Generate & Sync Firebase';
+                setPwdResetAlert(result.message || 'Firebase was updated, but the employee record could not be updated. Try again or ask the employee to use Forgot Password.', 'err');
                 return;
             }
 
             document.getElementById('pwdResetNewPassword').value = newPassword;
-            setPwdResetAlert('Password generated and synced to the sheet and Firebase.', 'ok');
-            setPwdResetAlert('✅ New password generated and saved in the sheet.', 'ok');
+            setPwdResetAlert('Password generated and synced to Firebase.', 'ok');
+            setPwdResetAlert('✅ New password generated and synced to Firebase.', 'ok');
             toast('✅ Password Updated', 'New password saved for ' + (pwdResetEmployee.name || pwdResetEmployee.id), 'ok');
             if (allEmp && allEmp.length) {
                 const idx = allEmp.findIndex(e => (e.id||'').toLowerCase() === (empId||'').toLowerCase());
@@ -1761,7 +1761,7 @@
             }
             pwdResetEmployee = { ...pwdResetEmployee, password: newPassword, mustChangePassword: true };
             btn.disabled = false;
-            btn.textContent = 'Generate & Update Sheet';
+            btn.textContent = 'Generate & Sync Firebase';
         }
 
         function copyPasswordReset() {

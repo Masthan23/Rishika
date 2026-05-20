@@ -230,6 +230,8 @@
     .proj-card-meta { font-size:.78rem; color:var(--muted) }
     .proj-badge { display:inline-flex; align-items:center; gap:4px; padding:4px 10px; border-radius:50px; font-size:.7rem; font-weight:700; border:1px solid var(--gb); background:rgba(255,255,255,.06); color:var(--muted) }
     .proj-badge.selected { border-color:rgba(124,58,237,.4); color:var(--mgac); background:rgba(124,58,237,.12) }
+    .proj-status-bar { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 14px; border:1px solid var(--gb); border-radius:18px; background:var(--item-bg); }
+    .proj-status-label { font-size:.88rem; color:var(--muted); }
 
     .emp-list { display:flex; flex-direction:column; gap:10px }
     .emp-card { padding:16px; border-radius:16px; border:1px solid var(--gb); background:var(--glass); transition:var(--tr) }
@@ -507,10 +509,20 @@
             <div class="card-hdr">
               <div class="card-t">🎬 Projects</div>
               <button class="btn btn-ghost btn-sm" onclick="refreshAll()">🔄 Refresh</button>
+              <div style="display:flex;align-items:center;gap:8px;margin-left:12px">
+                <div style="font-size:.78rem;color:var(--muted);">Show</div>
+                <button id="projFilterAll" class="btn btn-ghost btn-sm" onclick="setProjectFilter('all')">All</button>
+                <button id="projFilterActive" class="btn btn-ghost btn-sm" onclick="setProjectFilter('active')">Active</button>
+                <button id="projFilterCompleted" class="btn btn-ghost btn-sm" onclick="setProjectFilter('completed')">Completed</button>
+              </div>
             </div>
             <p class="card-sub" id="projSub">Click a project to view employees.</p>
             <div class="sw" style="margin-bottom:14px">
               <input class="sinp" id="projSearch" placeholder="Search projects…" oninput="renderProjects()" />
+            </div>
+            <div id="projStatusBar" class="proj-status-bar" style="display:none; margin-bottom:14px;">
+              <div class="proj-status-label">Select a project to view status</div>
+              <button id="projStatusToggle" class="btn btn-ghost btn-sm" onclick="toggleSelectedProjectStatus()">Toggle Status</button>
             </div>
             <div class="proj-cards" id="projCards"></div>
           </div>
@@ -686,6 +698,7 @@
   const ALLOWED_DOMAINS=['@dashverse.ai','@dashversemail.com','@dashtoon.com'];
   const PASSWORD='production@123'; // productivity tracker portal password
   const LS_PROJ='atp_projects';
+  const LS_PROJ_STATUS='atp_proj_status';
   const LS_EMP='atp_emp';
   const LS_ATT='atp_att';
   const LS_LV='atp_lv';
@@ -787,6 +800,7 @@
   let isLive=false;
   let myEmail='', myName='';
   let projects=[];
+  let projectFilter='all'; // 'all' | 'active' | 'completed'
   let selectedProject='';
   let allEmployees=[];
   let allAttendance=[];
@@ -845,6 +859,64 @@
     document.getElementById('loginAlert').innerHTML=`<div class="alert ${cls[type]||''}">${msg}</div>`;
   }
 
+  // ===== Project status helpers (persisted client-side)
+  function getProjectStatusMap(){
+    try{ return JSON.parse(localStorage.getItem(LS_PROJ_STATUS)||'{}'); }catch{ return {}; }
+  }
+  function getProjectStatus(name){
+    const m=getProjectStatusMap();
+    return (m[normalizeProjectName(name)]||'active');
+  }
+  function setProjectStatus(name,status){
+    try{
+      const key=normalizeProjectName(name);
+      const m=getProjectStatusMap();
+      m[key]=String(status||'active');
+      localStorage.setItem(LS_PROJ_STATUS, JSON.stringify(m));
+    }catch{}
+  }
+  function toggleProjectStatus(name,e){
+    try{ if(e && e.stopPropagation) e.stopPropagation(); }catch{}
+    const cur=getProjectStatus(name);
+    const next = cur==='active'?'completed':'active';
+    setProjectStatus(name, next);
+    // persist to backend
+    try{ callAPI('saveProjectStatus',{project:name,status:next}); }catch(err){}
+    renderProjects();
+  }
+  function setProjectFilter(f){ projectFilter=f||'all'; updateProjectFilterButtons(); renderProjects(); }
+  function updateProjectFilterButtons(){
+    ['all','active','completed'].forEach(k=>{ const el=document.getElementById('projFilter'+k.charAt(0).toUpperCase()+k.slice(1)); if(!el) return; if(projectFilter===k) el.classList.add('on'); else el.classList.remove('on'); });
+  }
+
+  function renderProjectStatusBar(){
+    const bar=document.getElementById('projStatusBar');
+    if(!bar) return;
+    if(!selectedProject){
+      bar.style.display='none';
+      return;
+    }
+    const status=getProjectStatus(selectedProject);
+    const label=bar.querySelector('.proj-status-label');
+    const button=document.getElementById('projStatusToggle');
+    if(label) label.textContent=`${selectedProject} status: ${status==='completed'?'Completed':'Active'}`;
+    if(button){
+      button.textContent = status==='active' ? 'Mark Completed' : 'Mark Active';
+      button.disabled=false;
+    }
+    bar.style.display='flex';
+  }
+
+  function toggleSelectedProjectStatus(){
+    if(!selectedProject) return;
+    const cur=getProjectStatus(selectedProject);
+    const next = cur==='active'?'completed':'active';
+    setProjectStatus(selectedProject, next);
+    try{ callAPI('saveProjectStatus',{project:selectedProject,status:next}); }catch(err){}
+    renderProjectStatusBar();
+    renderProjects();
+  }
+
   async function doLogin(){
     const email=(document.getElementById('pmEmail').value||'').trim().toLowerCase();
     const pass=(document.getElementById('pmPass').value||'').trim();
@@ -863,9 +935,25 @@
     const myDepartment=(val.manager&&val.manager.department)||'';
     const myId=(val.manager&&val.manager.id)||'';
     sessionStorage.setItem('pmSession', JSON.stringify({id:myId,email:myEmail,name:myName,role:myRole,department:myDepartment}));
-    refreshAll();
-    tick();
-    setInterval(tick,1000);
+    openApp();
+  }
+
+  function openApp(){
+    try{
+      const s=JSON.parse(sessionStorage.getItem('pmSession')||'null');
+      if(!s||!s.email) return;
+      myEmail=s.email; myName=s.name||s.email.split('@')[0];
+      document.getElementById('loginPg').style.display='none';
+      document.getElementById('pmApp').classList.add('on');
+      document.getElementById('sbName').textContent = myName || 'Logged in';
+      document.getElementById('sbEmail').textContent = myEmail || '';
+      document.getElementById('whoami').textContent = myName || 'Logged in';
+      document.getElementById('userEmail').textContent = myEmail || '';
+      showPanel('projects');
+      refreshAll();
+      tick();
+      if(!window._pmTickInterval) window._pmTickInterval = setInterval(tick,1000);
+    }catch(e){console.error('openApp error',e)}
   }
 
   function tick(){
@@ -961,11 +1049,11 @@
       renderAttendanceLog();
       renderTrackerMonitor();
       const [projRes,empRes,attRes,lvRes]=await Promise.all([
-        callAPI('getProjects',{},false),
-        callAPI('getEmployees',{},false),
-        callAPI('getAllAttendance',{},false),
-        callAPI('getAllLeaves',{},false)
-      ]);
+          callAPI('getProjects',{},false),
+          callAPI('getEmployees',{},false),
+          callAPI('getAllAttendance',{},false),
+          callAPI('getAllLeaves',{},false)
+        ]);
     if(projRes.success && projRes.projects){
       projects = sanitizeProjectList(projRes.projects);
       lsSet(LS_PROJ, projects);
@@ -982,6 +1070,13 @@
       allLeaves = sanitizeLeaves(lvRes.leaves);
       lsSet(LS_LV, allLeaves);
     }
+    // fetch server-side project statuses and persist locally
+    try{
+      const statusRes = await callAPI('getProjectStatuses',{},false);
+      if(statusRes && statusRes.success && statusRes.statuses){
+        try{ localStorage.setItem(LS_PROJ_STATUS, JSON.stringify(statusRes.statuses||{})); }catch{}
+      }
+    }catch(e){/* ignore */}
     renderProjects();
     renderAttendanceLog();
     renderTrackerMonitor();
@@ -994,7 +1089,12 @@
   function renderProjects(){
     const q=(document.getElementById('projSearch').value||'').trim().toLowerCase();
     projects=sanitizeProjectList(projects);
-    const list=projects.filter(p=>!q||String(p).toLowerCase().includes(q));
+    const list=projects.filter(p=>{
+      const matchesQuery = !q || String(p).toLowerCase().includes(q);
+      const status = getProjectStatus(p);
+      const matchesFilter = projectFilter==='all' || status===projectFilter;
+      return matchesQuery && matchesFilter;
+    });
     document.getElementById('projSub').textContent=`${list.length} project${list.length!==1?'s':''}`;
     const wrap=document.getElementById('projCards');
     if(!list.length){
@@ -1011,6 +1111,7 @@
         <div class="proj-card-meta">Click to view employees</div>
       </div>`;
     }).join('');
+    renderProjectStatusBar();
   }
 
   function esc(s){return (s||'').replace(/'/g,"\\'");}
@@ -1480,6 +1581,8 @@
       const s=JSON.parse(sessionStorage.getItem('pmSession')||'null');
       if(s&&s.email){myEmail=s.email;myName=s.name||s.email.split('@')[0];openApp();}
     }catch{}
+    // ensure filter buttons reflect saved/default state
+    updateProjectFilterButtons();
   });
 </script>
 </body>

@@ -136,6 +136,8 @@ function handleAction(action, data) {
     case 'updateLeaveStatus': return updateLeaveStatus(data);
     case 'updateLeaveRequest': return updateLeaveRequest(data);
     case 'getProjects':       return getProjects();
+    case 'getProjectStatuses': return getProjectStatuses();
+    case 'saveProjectStatus':  return saveProjectStatus(data);
     case 'saveProjects':      return saveProjects(data);
     case 'assignProject':     return assignProject(data);
     case 'getEmployeesByProject': return getEmployeesByProject(data);
@@ -280,6 +282,56 @@ function readProjectsFast(ss) {
     if (val) projects.push(val);
   }
   return projects;
+}
+
+function getProjectStatuses() {
+  try {
+    var ss = openSpreadsheet();
+    var sheet = ss.getSheetByName('ProjectStatus');
+    var out = {};
+    if (!sheet || sheet.getLastRow() < 2) return { success: true, statuses: out };
+    var rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, 2).getValues();
+    for (var i = 0; i < rows.length; i++) {
+      var proj = rows[i][0] ? String(rows[i][0]).trim() : '';
+      var status = rows[i][1] ? String(rows[i][1]).trim().toLowerCase() : 'active';
+      if (proj) out[proj.toString().toLowerCase()] = status;
+    }
+    return { success: true, statuses: out };
+  } catch (err) {
+    return { success: false, message: err.toString() };
+  }
+}
+
+function saveProjectStatus(data) {
+  try {
+    var project = (data.project || '').toString().trim();
+    var status = (data.status || 'active').toString().trim().toLowerCase();
+    if (!project) return { success: false, message: 'Missing project' };
+    if (status !== 'active' && status !== 'completed') status = 'active';
+    var ss = openSpreadsheet();
+    var sheet = ss.getSheetByName('ProjectStatus');
+    if (!sheet) {
+      sheet = ss.insertSheet('ProjectStatus');
+      sheet.getRange(1,1,1,2).setValues([['Project','Status']]);
+    }
+    var last = sheet.getLastRow();
+    var found = false;
+    if (last >= 2) {
+      var rows = sheet.getRange(2,1,last-1,2).getValues();
+      for (var i = 0; i < rows.length; i++){
+        var proj = rows[i][0] ? String(rows[i][0]).trim() : '';
+        if (proj && proj.toLowerCase() === project.toLowerCase()){
+          sheet.getRange(i+2,2).setValue(status);
+          found = true;
+          break;
+        }
+      }
+    }
+    if (!found) sheet.appendRow([project, status]);
+    return { success: true, project: project, status: status };
+  } catch (err) {
+    return { success: false, message: err.toString() };
+  }
 }
 
 function readManagersFast(ss) {
@@ -1445,7 +1497,7 @@ function updateEmployee(data) {
 
         if (hasField(data, 'name'))                 setCellIfProvided(sheet, r, hdr, 'name', data.name);
         if (hasField(data, 'password')) {
-          setCellIfProvided(sheet, r, hdr, 'password', data.password);
+          // Do not persist Firebase-managed passwords in the sheet.
           if (hdr['mustchangepassword'] !== undefined && !hasField(data, 'mustChangePassword')) {
             sheet.getRange(r, hdr['mustchangepassword'] + 1).setValue('FALSE');
           }

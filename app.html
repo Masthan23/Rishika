@@ -1132,6 +1132,7 @@
     document.addEventListener('DOMContentLoaded', ()=>{
         tick(); setInterval(tick, 1000);
         setMinDates();
+        initDateButtonListeners();
         document.getElementById('pgLogin')?.classList.add('on');
         document.getElementById('pgDash')?.classList.remove('on');
         document.getElementById('loginEmail').addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); document.getElementById('loginPassword').focus(); } });
@@ -1418,18 +1419,6 @@
                     }
                     showAlert('loginAlerts', 'Your employee profile exists, but your Firebase login is not ready yet. Please contact HR.', 'err');
                 } else if (code === 'auth/wrong-password' || code === 'auth/invalid-credential' || code === 'auth/invalid-login-credentials') {
-                    const sheetPassword = (profile.employee && profile.employee.password ? profile.employee.password : '').toString().trim();
-                    if (sheetPassword && sheetPassword === password) {
-                        try {
-                            await firebase.auth().sendPasswordResetEmail(profile.email);
-                            showAlert('loginAlerts', `Your sheet password is correct, but Firebase still has an older password. A Firebase reset email was sent to ${profile.email}. Please set your password from that email, then sign in again.`, 'warn');
-                            toast('Password Reset Sent', 'Check your email to sync Firebase login', 'warn');
-                        } catch (resetErr) {
-                            showAlert('loginAlerts', 'Your sheet password is correct, but Firebase password is out of sync. Please use Forgot Password or contact HR.', 'err');
-                            toast('Firebase Sync Needed', 'Use Forgot Password to reset Firebase login', 'err');
-                        }
-                        return;
-                    }
                     showAlert('loginAlerts', 'Invalid email or password.', 'err');
                 } else if (code === 'auth/network-request-failed') {
                     showAlert('loginAlerts', 'Unable to connect to Firebase. Please try again.', 'err');
@@ -1448,7 +1437,7 @@
                 return;
             }
 
-            callAPI('updateEmployee', { email: profile.email, password, mustChangePassword: false })
+            callAPI('updateEmployee', { email: profile.email, mustChangePassword: false })
                 .then(() => clearEmployeeProfileCache(profile.email, profile.employee && (profile.employee.id || profile.employee.empId)))
                 .catch(() => {});
 
@@ -1596,7 +1585,7 @@
                 throw firebaseErr;
             }
 
-            const res = await callAPI('updateEmployee', { email: profile.email, password, mustChangePassword: false });
+            const res = await callAPI('updateEmployee', { email: profile.email, mustChangePassword: false });
             if (!res.success) {
                 showAlert('loginAlerts', res.message || 'Could not update employee profile.', 'err');
                 return;
@@ -1895,7 +1884,7 @@
         if(!list.length){ opts.innerHTML=`<div class="mp-empty">${search?'No matching projects':'No projects available.'}</div>`; return; }
         opts.innerHTML = list.map(p=>{ const sel=empSelectedProjects.has(p); return`<div class="mp-option${sel?' sel':''}" onclick="toggleEmpProject('${escStr(p)}')"><div class="mp-chk">${sel?'✓':''}</div><span>${p}</span></div>`; }).join('');
     }
-    function toggleEmpProject(proj) { empSelectedProjects.has(proj)?empSelectedProjects.delete(proj):empSelectedProjects.add(proj); filterEmpMSOptions(); updateEmpMSTrigger(); updateEmpMSTags(); event.stopPropagation(); }
+    function toggleEmpProject(proj) { empSelectedProjects.has(proj)?empSelectedProjects.delete(proj):empSelectedProjects.add(proj); filterEmpMSOptions(); updateEmpMSTrigger(); updateEmpMSTags(); closeEmpMS(); event.stopPropagation(); }
     function updateEmpMSTrigger() {
         const txt = document.getElementById('empProjTriggerTxt'); if(!txt) return;
         const sel = [...empSelectedProjects];
