@@ -745,6 +745,7 @@
                 <div class="nav-item" data-panel="att" onclick="showPanel('att');closeSB()"><span class="n-ic">✅</span>Attendance Log</div>
                 <div class="nav-item" data-panel="leaves" onclick="showPanel('leaves');closeSB()"><span class="n-ic">🏖️</span>Leave Management</div>
                 <div class="nav-item" data-panel="monitor" onclick="showPanel('monitor');closeSB()"><span class="n-ic">🗓️</span>Leave Monitor</div>
+                <div class="nav-item" data-panel="announce" onclick="showPanel('announce');closeSB()"><span class="n-ic">📣</span>Announcements</div>
                 <div class="nav-sec">Management</div>
                 <div class="nav-item" data-panel="proj" onclick="showPanel('proj');closeSB()"><span class="n-ic">🎬</span>Project Manager</div>
                 <div class="nav-item" data-panel="contracts" onclick="showPanel('contracts');closeSB()"><span class="n-ic">📄</span>Contracts</div>
@@ -844,6 +845,52 @@
                                 <thead><tr><th>Employee</th><th>Email</th><th>Role</th><th>Department</th><th>Work Mode</th><th>Manager</th><th>Date</th><th>Check-in</th><th>Status</th></tr></thead>
                                 <tbody id="dashAttBody"><tr><td colspan="9"><div class="empty"><div class="ei">⏳</div><h3>Loading...</h3></div></td></tr></tbody>
                             </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ANNOUNCEMENTS -->
+                <div class="panel" id="panel-announce">
+                    <div class="card">
+                        <div class="card-hdr">
+                            <div class="card-t">📣 Announcements</div>
+                            <div class="sb-bar">
+                                <button class="btn btn-ghost btn-sm" onclick="openEmployeeListModal('all')">View Employees</button>
+                            </div>
+                        </div>
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                            <div>
+                                <label class="flbl">Holiday Announcer</label>
+                                <div class="fgrp">
+                                    <label class="flbl">Holiday Date</label>
+                                    <div class="date-btn-wrap"><input type="date" id="holidayDate"/></div>
+                                </div>
+                                <div class="fgrp">
+                                    <label class="flbl">Reason / Note</label>
+                                    <input type="text" class="finp" id="holidayReason" placeholder="E.g. Independence Day"/>
+                                </div>
+                                <div style="display:flex;gap:8px;align-items:center;">
+                                    <button class="btn btn-p" onclick="sendHolidayAnnouncement()">📧 Send Holiday Mail</button>
+                                    <button class="btn btn-ghost" onclick="clearHolidayAnnouncer()">Clear</button>
+                                </div>
+                                <div id="holidayAnnounceAlert" style="margin-top:10px;"></div>
+                            </div>
+                            <div>
+                                <label class="flbl">Notice Announcement</label>
+                                <div class="fgrp">
+                                    <label class="flbl">Subject</label>
+                                    <input type="text" class="finp" id="noticeSubject" placeholder="Short subject"/>
+                                </div>
+                                <div class="fgrp">
+                                    <label class="flbl">Message</label>
+                                    <textarea id="noticeMessage" class="finp" style="min-height:120px;resize:vertical;" placeholder="Write the announcement here..."></textarea>
+                                </div>
+                                <div style="display:flex;gap:8px;align-items:center;">
+                                    <button class="btn btn-p" onclick="sendNoticeAnnouncement()">📧 Send Notice</button>
+                                    <button class="btn btn-ghost" onclick="clearNoticeAnnouncer()">Clear</button>
+                                </div>
+                                <div id="noticeAnnounceAlert" style="margin-top:10px;"></div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1519,6 +1566,7 @@
             att:['Attendance Log','Daily attendance records'],
             leaves:['Leave Management','View & manage all leave requests'],
             monitor:['Leave Monitor','Track leave, active staff, and missing logins across any day or range'],
+            announce:['Announcements','Send holiday and notice announcements to active employees'],
             proj:['Project Manager','Manage & assign projects'],
             contracts:['Contracts','Employment type & contract tracking'],
             'profile-manager':['Add Manager Profile','Create and manage manager and reporting manager profiles'],
@@ -2277,6 +2325,40 @@
             if(r.success){toast('✅ Email OK',r.message,'ok');alert('✅ Email System Working!\n\n'+JSON.stringify(r.details,null,2));}
             else{toast('❌ Email Failed',r.message,'err');alert('❌ Email System Error!\n\n'+r.message+'\n\nDetails: '+JSON.stringify(r.details,null,2));}
         }
+
+        function clearHolidayAnnouncer(){document.getElementById('holidayDate').value='';document.getElementById('holidayReason').value='';document.getElementById('holidayAnnounceAlert').innerHTML=''}
+        function clearNoticeAnnouncer(){document.getElementById('noticeSubject').value='';document.getElementById('noticeMessage').value='';document.getElementById('noticeAnnounceAlert').innerHTML=''}
+
+        async function sendHolidayAnnouncement(){
+            const date=document.getElementById('holidayDate').value;const reason=document.getElementById('holidayReason').value.trim();
+            if(!date)return showInlineAlert('holidayAnnounceAlert','⚠️ Please select a date','warn');
+            if(!reason)return showInlineAlert('holidayAnnounceAlert','⚠️ Please provide a reason','warn');
+            const subject=`Holiday Notice — ${new Date(date).toLocaleDateString('en-US',{year:'numeric',month:'short',day:'numeric'})}`;
+            const safeReason = (reason||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+            const body=`<p>Dear team,</p><p>We are declaring a holiday on <strong>${new Date(date).toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'})}</strong>.</p><p>Reason: ${safeReason}</p><p>Regards,<br>HR Team</p>`;
+            const emails=(allEmp||[]).filter(e=>{const st=String(e.status||e.employeeStatus||'Active').toLowerCase();return st!=='inactive'&&st!=='terminated'&&e.email}).map(e=>e.email);
+            if(!emails.length)return showInlineAlert('holidayAnnounceAlert','⚠️ No active employees found to send','warn');
+            toast('📧 Sending holiday announcement','Please wait...','info');
+            const r=await callAPI('sendHolidayAnnouncement',{date,reason,subject,body,emails:JSON.stringify(emails)});
+            if(r.success){showInlineAlert('holidayAnnounceAlert','✅ Holiday announcement sent','ok');toast('✅ Sent','Holiday announcement delivered','ok');}
+            else{showInlineAlert('holidayAnnounceAlert','❌ '+(r.message||'Failed to send'),'err');toast('❌ Failed',r.message||'Could not send emails','err')}
+        }
+
+        async function sendNoticeAnnouncement(){
+            const subject=document.getElementById('noticeSubject').value.trim();const msg=document.getElementById('noticeMessage').value.trim();
+            if(!subject)return showInlineAlert('noticeAnnounceAlert','⚠️ Please provide a subject','warn');
+            if(!msg)return showInlineAlert('noticeAnnounceAlert','⚠️ Please provide a message','warn');
+            const safeMsg = (msg||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br/>');
+            const body=`<p>Dear team,</p><div>${safeMsg}</div><p>Regards,<br>HR Team</p>`;
+            const emails=(allEmp||[]).filter(e=>{const st=String(e.status||e.employeeStatus||'Active').toLowerCase();return st!=='inactive'&&st!=='terminated'&&e.email}).map(e=>e.email);
+            if(!emails.length)return showInlineAlert('noticeAnnounceAlert','⚠️ No active employees found to send','warn');
+            toast('📧 Sending notice','Please wait...','info');
+            const r=await callAPI('sendNoticeAnnouncement',{subject,body,emails:JSON.stringify(emails)});
+            if(r.success){showInlineAlert('noticeAnnounceAlert','✅ Notice sent to active employees','ok');toast('✅ Sent','Notice delivered','ok');}
+            else{showInlineAlert('noticeAnnounceAlert','❌ '+(r.message||'Failed to send'),'err');toast('❌ Failed',r.message||'Could not send emails','err')}
+        }
+
+        function showInlineAlert(id,msg,type){const cls={ok:'al-ok',err:'al-err',warn:'al-warn',info:'al-info'};const el=document.getElementById(id);if(!el)return;el.innerHTML=`<div class="alert ${cls[type]||'al-ok'}">${msg}</div>`;setTimeout(()=>{if(el)el.innerHTML=''},5000)}
 
         // ===== MANAGER EMAIL LOOKUP =====
         function clearMgrPreview(type){const previewId=type==='rep'?'repMgrPreview':'mgrPreview';const hiddenId=type==='rep'?'mRepMgr':'mMgr';document.getElementById(previewId).className='mgr-preview';document.getElementById(previewId).textContent='';document.getElementById(hiddenId).value='';}

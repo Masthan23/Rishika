@@ -111,6 +111,8 @@ function handleAction(action, data) {
   switch (action) {
     case 'ping':              return { success: true, message: 'pong' };
     case 'testEmail':         return testEmailSystem(data);
+    case 'sendHolidayAnnouncement': return sendHolidayAnnouncement(data);
+    case 'sendNoticeAnnouncement':  return sendNoticeAnnouncement(data);
     case 'setup':             return setupSheets();
     case 'adminLogin':        return adminLogin(data);
     case 'employeeLogin':     return employeeLogin(data);
@@ -183,6 +185,8 @@ function requiresAdminSession(action) {
     saveProjects: true,
     assignProject: true,
     setupWorkDoneReminderTrigger: true
+    ,sendHolidayAnnouncement: true
+    ,sendNoticeAnnouncement: true
   };
   return !!protectedActions[action];
 }
@@ -493,10 +497,6 @@ function setupSheets() {
     'HRProfiles': HR_PROFILE_HEADERS,
     'Absences': ABSENCE_HEADERS,
     'WorkDoneLogs': WORK_DONE_HEADERS,
-    'AbsentUsers': [
-      'Date', 'EmpID', 'Email', 'Name', 'Department',
-      'Status', 'RecordedOn'
-    ],
     'MissingLoginAlerts': MISSING_LOGIN_ALERT_HEADERS
   };
 
@@ -516,6 +516,7 @@ function setupSheets() {
   ensureManagerSchema(ss);
   ensureLeaveSchema(ss);
   ensureAbsenceSchema(ss);
+  migrateAndDeleteLegacyAbsentUsersSheet(ss);
   ensureWorkDoneSchema(ss);
   ensureMissingLoginAlertsSchema(ss);
   ensureDailyAbsentTrigger();
@@ -711,6 +712,64 @@ function ensureAbsenceSchema(ss) {
     headerColor: '#6c757d',
     restyleAllHeaders: true
   });
+}
+
+function migrateAndDeleteLegacyAbsentUsersSheet(ss) {
+  const legacySheet = ss.getSheetByName('AbsentUsers');
+  if (!legacySheet) return;
+
+  ensureAbsenceSchema(ss);
+  const absenceSheet = ss.getSheetByName('Absences');
+  if (!absenceSheet) return;
+
+  const existingKeys = {};
+  if (absenceSheet.getLastRow() > 1) {
+    const existing = absenceSheet.getRange(2, 1, absenceSheet.getLastRow() - 1, absenceSheet.getLastColumn()).getValues();
+    for (let i = 0; i < existing.length; i++) {
+      const rowDate = formatSheetDate(existing[i][0]) || String(existing[i][0] || '').substring(0, 10);
+      const email = normalizeEmail(existing[i][2]);
+      if (rowDate && email) existingKeys[rowDate + '|' + email] = true;
+    }
+  }
+
+  const migratedRows = [];
+  if (legacySheet.getLastRow() > 1) {
+    const hdr = getHeaderMap(legacySheet, true);
+    const rows = legacySheet.getRange(2, 1, legacySheet.getLastRow() - 1, legacySheet.getLastColumn()).getValues();
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const date = formatSheetDate(getValueByHeader(row, hdr, 'date', 0)) || String(getValueByHeader(row, hdr, 'date', 0) || '').substring(0, 10);
+      const email = normalizeEmail(getValueByHeader(row, hdr, 'email', 2));
+      if (!date || !email) continue;
+      const key = date + '|' + email;
+      if (existingKeys[key]) continue;
+      existingKeys[key] = true;
+      migratedRows.push([
+        date,
+        getValueByHeader(row, hdr, 'empid', 1),
+        email,
+        getValueByHeader(row, hdr, 'name', 3),
+        getValueByHeader(row, hdr, 'department', 4),
+        '',
+        '',
+        '',
+        '',
+        '',
+        '',
+        getValueByHeader(row, hdr, 'status', 5) || 'Absent'
+      ]);
+    }
+  }
+
+  if (migratedRows.length > 0) {
+    const startRow = absenceSheet.getLastRow() + 1;
+    absenceSheet.getRange(startRow, 1, migratedRows.length, ABSENCE_HEADERS.length).setValues(migratedRows);
+    absenceSheet.getRange(startRow, 1, migratedRows.length, ABSENCE_HEADERS.length).setBackground('#f8d7da');
+  }
+
+  if (ss.getSheets().length > 1) {
+    ss.deleteSheet(legacySheet);
+  }
 }
 
 function adminLogin(data) {
@@ -4389,4 +4448,91 @@ function testEmailSystem(data) {
     Logger.log('Email test failed: ' + err.toString());
   }
   return result;
+}
+
+function _normalizeEmailsField(emailsField) {
+  if (!emailsField) return [];
+  try {
+    if (typeof emailsField === 'string') {
+      // try JSON
+      var parsed = null;
+      try { parsed = JSON.parse(emailsField); } catch (e) { parsed = null }
+      if (Array.isArray(parsed)) return parsed.filter(Boolean).map(String);
+      // comma separated
+      return String(emailsField).split(/[,;\n]/).map(function(s){return String(s||'').trim()}).filter(Boolean);
+    }
+    if (Array.isArray(emailsField)) return emailsField.map(String).filter(Boolean);
+  } catch (err) {}
+  return [];
+}
+
+function sendHolidayAnnouncement(data) {
+  var response = { success: false, message: '', sent: [], issues: [] };
+  try {
+    var date = data.date || '';
+    var reason = data.reason || '';
+    var subject = data.subject || ('Holiday Notice — ' + (date || ''));
+    var body = data.body || ('<p>Holiday on: ' + (date || '') + '</p><p>' + (reason || '') + '</p>');
+
+    var emails = _normalizeEmailsField(data.emails);
+    if (!emails.length) {
+      var all = getEmployees();
+      if (all && all.success && Array.isArray(all.employees)) {
+        emails = all.employees.filter(function(e){
+          var st = String(e.status || e.employeeStatus || 'Active').toLowerCase();
+          return st !== 'inactive' && st !== 'terminated' && e.email;
+        }).map(function(e){return e.email});
+      }
+    }
+
+    if (!emails.length) { response.message = 'No recipient emails found'; return response; }
+
+    var plain = 'Holiday Notice\n\n' + (reason || '') + '\n\nDate: ' + (date || '') + '\n\nRegards,\nHR Team';
+    for (var i=0;i<emails.length;i++){
+      try{
+        MailApp.sendEmail({to: String(emails[i]), subject: subject, body: plain, htmlBody: body});
+        response.sent.push(String(emails[i]));
+      }catch(err){ response.issues.push('Failed:'+String(emails[i])+': '+String(err)); }
+    }
+    response.success = response.sent.length>0;
+    response.message = response.success ? 'Sent to ' + response.sent.length + ' recipients' : 'No emails sent';
+    return response;
+  } catch (err) {
+    response.message = String(err);
+    response.issues.push(String(err));
+    return response;
+  }
+}
+
+function sendNoticeAnnouncement(data) {
+  var response = { success: false, message: '', sent: [], issues: [] };
+  try {
+    var subject = data.subject || 'Company Notice';
+    var body = data.body || '';
+    var emails = _normalizeEmailsField(data.emails);
+    if (!emails.length) {
+      var all = getEmployees();
+      if (all && all.success && Array.isArray(all.employees)) {
+        emails = all.employees.filter(function(e){
+          var st = String(e.status || e.employeeStatus || 'Active').toLowerCase();
+          return st !== 'inactive' && st !== 'terminated' && e.email;
+        }).map(function(e){return e.email});
+      }
+    }
+    if (!emails.length) { response.message = 'No recipient emails found'; return response; }
+    var plain = subject + '\n\n' + String(body).replace(/<[^>]*>/g,'') + '\n\nRegards,\nHR Team';
+    for (var i=0;i<emails.length;i++){
+      try{
+        MailApp.sendEmail({to: String(emails[i]), subject: subject, body: plain, htmlBody: body});
+        response.sent.push(String(emails[i]));
+      }catch(err){ response.issues.push('Failed:'+String(emails[i])+': '+String(err)); }
+    }
+    response.success = response.sent.length>0;
+    response.message = response.success ? 'Sent to ' + response.sent.length + ' recipients' : 'No emails sent';
+    return response;
+  } catch (err) {
+    response.message = String(err);
+    response.issues.push(String(err));
+    return response;
+  }
 }
