@@ -567,7 +567,7 @@
     function setAlert(message, type) {
       const el = document.getElementById('formAlert');
       const cls = type === 'error' ? 'al-err' : 'al-ok';
-      el.innerHTML = `<div class="alert ${cls}">${message}</div>`;
+      el.innerHTML = `<div class="alert ${cls}">${escapeHtml(message)}</div>`;
       if (message) {
         setTimeout(() => {
           if (el.innerText.includes(message.replace(/<[^>]+>/g, ''))) el.innerHTML = '';

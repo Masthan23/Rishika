@@ -1605,7 +1605,8 @@
             const freshProfile = await callAPI('getEmployee', { email: profile.email }, false).catch(() => null);
             emp = freshProfile && freshProfile.success && freshProfile.employee
                 ? { ...freshProfile.employee, mustChangePassword: false }
-                : { ...(emp || profile.employee), password, mustChangePassword: false };
+                : { ...(emp || profile.employee), mustChangePassword: false };
+            if (emp && Object.prototype.hasOwnProperty.call(emp, 'password')) delete emp.password;
             sessionStorage.setItem('empLoggedIn', emp.id || emp.email || '');
             sessionStorage.setItem('empData', JSON.stringify(emp));
 
@@ -1809,17 +1810,74 @@
     // ===== PORTAL ACCESS =====
     let empPortalRoles = [];
 
+    function normalizePortalRole(role) {
+        return (role || '').toString().trim().toLowerCase().replace(/[_-]+/g, ' ').replace(/\s+/g, ' ');
+    }
+
+    function mergePortalRoles() {
+        const seen = new Set();
+        return Array.from(arguments)
+            .flat()
+            .map(r => (r || '').toString().trim())
+            .filter(Boolean)
+            .filter(r => {
+                const key = normalizePortalRole(r);
+                if (!key || seen.has(key)) return false;
+                seen.add(key);
+                return true;
+            });
+    }
+
+    function getEmployeeProfilePortalRoles(employee) {
+        const roles = Array.isArray(employee && employee.portalRoles) ? [...employee.portalRoles] : [];
+        const role = normalizePortalRole(employee && employee.role);
+        if (
+            role.includes('productivity tracker') ||
+            role.includes('production manager') ||
+            role.includes('productivitytracker') ||
+            role.includes('productionmanager')
+        ) {
+            roles.push('Productivity Tracker');
+        }
+        return roles;
+    }
+
+    function getPortalCacheKey(email) {
+        return 'emp_portal_roles_' + (email || '').toLowerCase().trim();
+    }
+
     async function checkEmpPortalAccess(email) {
         if (!email) return;
+        const baseRoles = getEmployeeProfilePortalRoles(emp);
+        const cacheKey = getPortalCacheKey(email);
+        try {
+            const cached = JSON.parse(sessionStorage.getItem(cacheKey) || 'null');
+            if (cached && Array.isArray(cached.roles) && Date.now() - cached.ts < 300000) {
+                empPortalRoles = mergePortalRoles(baseRoles, cached.roles);
+            } else {
+                empPortalRoles = mergePortalRoles(baseRoles);
+            }
+        } catch {
+            empPortalRoles = mergePortalRoles(baseRoles);
+        }
+        renderPortalButtons();
+
+        if (Array.isArray(emp && emp.portalRoles)) {
+            try { sessionStorage.setItem(cacheKey, JSON.stringify({ roles: empPortalRoles, ts: Date.now() })); } catch {}
+            return;
+        }
+
         try {
             const res = await callAPI('getManagers', {}, true);
-            if (!res.success) { empPortalRoles = []; renderPortalButtons(); return; }
+            if (!res.success) { empPortalRoles = mergePortalRoles(baseRoles); renderPortalButtons(); return; }
             const norm = (email || '').toLowerCase().trim();
-            empPortalRoles = (res.managers || [])
+            const managerRoles = (res.managers || [])
                 .filter(m => (m.email || '').toLowerCase().trim() === norm)
                 .map(m => (m.managerType || '').trim());
+            empPortalRoles = mergePortalRoles(baseRoles, managerRoles);
+            try { sessionStorage.setItem(cacheKey, JSON.stringify({ roles: empPortalRoles, ts: Date.now() })); } catch {}
         } catch(e) {
-            empPortalRoles = [];
+            empPortalRoles = mergePortalRoles(baseRoles);
         }
         renderPortalButtons();
     }
@@ -1829,13 +1887,16 @@
         const container = document.getElementById('portalBtnsContainer');
         if (!section || !container) return;
         const btns = [];
-        if (empPortalRoles.some(r => r.toLowerCase() === 'manager')) {
+        if (empPortalRoles.some(r => normalizePortalRole(r) === 'manager')) {
             btns.push(`<button class="btn-portal btn-portal-mgr" onclick="goToPortal('manager')">👔 Login to Manager Portal</button>`);
         }
-        if (empPortalRoles.some(r => r.toLowerCase().includes('reporting'))) {
+        if (empPortalRoles.some(r => normalizePortalRole(r).includes('reporting'))) {
             btns.push(`<button class="btn-portal btn-portal-rep" onclick="goToPortal('reporting')">📊 Login to Reporting Manager Portal</button>`);
         }
-        if (empPortalRoles.some(r => r.toLowerCase().includes('productivity') || r.toLowerCase().includes('production'))) {
+        if (empPortalRoles.some(r => {
+            const role = normalizePortalRole(r);
+            return role.includes('productivity') || role.includes('production');
+        })) {
             btns.push(`<button class="btn-portal btn-portal-prod" onclick="goToPortal('production')">🎬 Login to Productivity Tracker Portal</button>`);
         }
         if (btns.length > 0) {

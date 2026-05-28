@@ -718,7 +718,7 @@
                 <input type="password" class="finp" id="aPass" placeholder="••••••••" autocomplete="current-password"/></div>
             </div>
             <button class="btn btn-p btn-fw" id="loginBtn" onclick="doLogin()">🔐 Sign In to HR Panel</button>
-            <div class="hint-box">🔑 HR Login: <strong>hr</strong> / <strong>hr@123</strong></div>
+            <div class="hint-box">Default bootstrap login works only until the first HR profile is created.</div>
         </div>
     </div>
 
@@ -908,7 +908,7 @@
                                 <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;">
                                     <button class="btn btn-ok btn-sm" id="pwdResetGenerateBtn" onclick="generateAndSavePassword()">Generate & Sync Firebase</button>
                                     <button class="btn btn-ghost btn-sm" onclick="copyPasswordReset()">Copy Password</button>
-                                    <span style="color:var(--muted);font-size:.85rem;">This will generate a new password and save it to the employee record in the sheet.</span>
+                                    <span style="color:var(--muted);font-size:.85rem;">This will generate a new password and sync it to Firebase only.</span>
                                 </div>
                             </div>
                         </div>
@@ -1757,9 +1757,9 @@
             toast('✅ Password Updated', 'New password saved for ' + (pwdResetEmployee.name || pwdResetEmployee.id), 'ok');
             if (allEmp && allEmp.length) {
                 const idx = allEmp.findIndex(e => (e.id||'').toLowerCase() === (empId||'').toLowerCase());
-                if (idx > -1) allEmp[idx] = { ...allEmp[idx], password: newPassword, mustChangePassword: true };
+                if (idx > -1) allEmp[idx] = { ...allEmp[idx], mustChangePassword: true };
             }
-            pwdResetEmployee = { ...pwdResetEmployee, password: newPassword, mustChangePassword: true };
+            pwdResetEmployee = { ...pwdResetEmployee, mustChangePassword: true };
             btn.disabled = false;
             btn.textContent = 'Generate & Sync Firebase';
         }
@@ -1982,6 +1982,8 @@
         }
 
         async function callAPI(action,data={},useCache=false){
+            const adminToken=sessionStorage.getItem('hrAdminToken')||'';
+            if(adminToken&&action!=='adminLogin'&&!data.adminToken)data={...data,adminToken};
             const cacheKey=CACHE.key(action,data);
             if(useCache){const c=CACHE.get(cacheKey);if(c)return c}
             const params=new URLSearchParams({action});
@@ -2171,7 +2173,8 @@
             document.getElementById('aUser').addEventListener('keydown',e=>{if(e.key==='Enter')document.getElementById('aPass').focus()});
             document.getElementById('aPass').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin()});
             checkConn();initRoleDropdown();
-            if(sessionStorage.getItem('hrOk')){document.querySelector('.adm-name').textContent=sessionStorage.getItem('hrUserName')||'HR Administrator';document.getElementById('loginPg').style.display='none';document.getElementById('adminApp').classList.add('on');setTimeout(initAdmin,100);}
+            if(sessionStorage.getItem('hrOk')&&sessionStorage.getItem('hrAdminToken')){document.querySelector('.adm-name').textContent=sessionStorage.getItem('hrUserName')||'HR Administrator';document.getElementById('loginPg').style.display='none';document.getElementById('adminApp').classList.add('on');setTimeout(initAdmin,100);}
+            else if(sessionStorage.getItem('hrOk')){logout();}
             document.addEventListener('click',e=>{if(!e.target.closest('.ms-wrap'))closeAllMS()});
         });
 
@@ -2195,15 +2198,15 @@
             const u=document.getElementById('aUser').value.trim(),p=document.getElementById('aPass').value.trim();
             if(!u||!p){loginMsg('⚠️ Fill in all fields','warn');return}
             const btn=document.getElementById('loginBtn');btn.innerHTML='<div class="spin"></div> Signing in...';btn.disabled=true;
-            let res;if(u===HR_CREDS.username&&p===HR_CREDS.password){res={success:true,profile:{username:u,name:'HR Administrator',role:'HR Administrator'}}}else{res=await callAPI('adminLogin',{username:u,password:p})}
+            let res=await callAPI('adminLogin',{username:u,password:p})
             btn.innerHTML='🔐 Sign In to HR Panel';btn.disabled=false;
-            if(res.success){sessionStorage.setItem('hrOk','1');sessionStorage.setItem('hrUser',res.profile?.username||u);sessionStorage.setItem('hrUserName',res.profile?.name||u);document.querySelector('.adm-name').textContent=res.profile?.name||'HR Administrator';document.getElementById('loginPg').style.display='none';document.getElementById('adminApp').classList.add('on');initAdmin();toast('👋 Welcome HR!',isLive?'Connected ✅':'Local mode ⚠️',isLive?'ok':'warn');}
+            if(res.success){if(res.adminToken)sessionStorage.setItem('hrAdminToken',res.adminToken);sessionStorage.setItem('hrOk','1');sessionStorage.setItem('hrUser',res.profile?.username||u);sessionStorage.setItem('hrUserName',res.profile?.name||u);document.querySelector('.adm-name').textContent=res.profile?.name||'HR Administrator';document.getElementById('loginPg').style.display='none';document.getElementById('adminApp').classList.add('on');initAdmin();toast('👋 Welcome HR!',isLive?'Connected ✅':'Local mode ⚠️',isLive?'ok':'warn');}
             else{loginMsg(`❌ ${res.message||'Invalid credentials'}`,'err')}
         }
 
-        function logout(){sessionStorage.removeItem('hrOk');sessionStorage.removeItem('hrUser');sessionStorage.removeItem('hrUserName');CACHE.clearAll();dataLoaded=false;document.getElementById('loginPg').style.display='flex';document.getElementById('adminApp').classList.remove('on');document.getElementById('aUser').value='';document.getElementById('aPass').value='';checkConn();}
+        function logout(){sessionStorage.removeItem('hrOk');sessionStorage.removeItem('hrUser');sessionStorage.removeItem('hrUserName');sessionStorage.removeItem('hrAdminToken');CACHE.clearAll();dataLoaded=false;document.getElementById('loginPg').style.display='flex';document.getElementById('adminApp').classList.remove('on');document.getElementById('aUser').value='';document.getElementById('aPass').value='';checkConn();}
         function navigateToPortal(dest,flagKey){sessionStorage.setItem(flagKey,'1');sessionStorage.setItem('fromIndexPage','1');window.location.href=dest;}
-        function loginMsg(msg,type){const cls={ok:'al-ok',err:'al-err',warn:'al-warn'};document.getElementById('loginAlert').innerHTML=`<div class="alert ${cls[type]}">${msg}</div>`;setTimeout(()=>document.getElementById('loginAlert').innerHTML='',3500);}
+        function loginMsg(msg,type){const cls={ok:'al-ok',err:'al-err',warn:'al-warn'};document.getElementById('loginAlert').innerHTML=`<div class="alert ${cls[type]}">${escHtml(msg)}</div>`;setTimeout(()=>document.getElementById('loginAlert').innerHTML='',3500);}
         function initAdmin(){ticker();setInterval(ticker,1000);document.getElementById('todayLbl').textContent=new Date().toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'});updateModeUI();if(!dataLoaded){showLoadingOverlay();loadAll();}initDateButtonListeners();}
         function initDateButtonListeners(){document.querySelectorAll('input[type="date"]').forEach(input=>{if(input.dataset.dateBtnInit==='1')return;const openPicker=()=>{if(typeof input.showPicker==='function')input.showPicker();};input.setAttribute('inputmode','none');input.addEventListener('pointerdown',e=>{e.preventDefault();openPicker();});input.addEventListener('keydown',e=>{e.preventDefault();});input.dataset.dateBtnInit='1';})};
         function updateModeUI(){const lbl=document.getElementById('modeLabel');if(lbl)lbl.textContent=isLive?'Google Sheets Live':'Local Mode'}
@@ -2789,8 +2792,8 @@
         function closeConf(){document.getElementById('confOv').classList.remove('on');confCb=null}
         function doConf(){if(confCb)confCb();closeConf()}
 
-        function toast(title,msg,type='info'){const box=document.getElementById('toastBox');const icons={ok:'✅',err:'❌',warn:'⚠️',info:'ℹ️'},tc={ok:'toast-ok',err:'toast-err',warn:'toast-warn',info:'toast-info'};const t=document.createElement('div');t.className=`toast ${tc[type]||'toast-info'}`;t.innerHTML=`<div class="t-ic">${icons[type]||'ℹ️'}</div><div class="t-bd"><div class="t-tl">${title}</div><div class="t-mg">${msg||''}</div></div><div class="t-pr"></div>`;t.onclick=()=>t.remove();box.appendChild(t);setTimeout(()=>t.remove(),3800);}
-        function modMsg(id,msg){document.getElementById(id).innerHTML=`<div class="alert al-err">${msg}</div>`;setTimeout(()=>{const el=document.getElementById(id);if(el)el.innerHTML=''},4000);}
+        function toast(title,msg,type='info'){const box=document.getElementById('toastBox');const icons={ok:'✅',err:'❌',warn:'⚠️',info:'ℹ️'},tc={ok:'toast-ok',err:'toast-err',warn:'toast-warn',info:'toast-info'};const t=document.createElement('div');t.className=`toast ${tc[type]||'toast-info'}`;t.innerHTML=`<div class="t-ic">${icons[type]||'ℹ️'}</div><div class="t-bd"><div class="t-tl">${escHtml(title)}</div><div class="t-mg">${escHtml(msg||'')}</div></div><div class="t-pr"></div>`;t.onclick=()=>t.remove();box.appendChild(t);setTimeout(()=>t.remove(),3800);}
+        function modMsg(id,msg){document.getElementById(id).innerHTML=`<div class="alert al-err">${escHtml(msg)}</div>`;setTimeout(()=>{const el=document.getElementById(id);if(el)el.innerHTML=''},4000);}
     </script>
     <script>
     (function () {

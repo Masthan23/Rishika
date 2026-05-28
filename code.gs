@@ -53,6 +53,7 @@ const WORK_DONE_HEADERS = [
 const ABSENT_CAPTURE_HOUR = 18;
 const ABSENT_CAPTURE_MINUTE = 30;
 const WORK_DONE_REMINDER_START_HOUR = 18;
+const WORK_DONE_REMINDER_TRIGGER_VERSION = 'WORK_DONE_REMINDER_TRIGGER_V2_TOP_OF_HOUR';
 
 function doGet(e) {
   try {
@@ -102,6 +103,11 @@ function openSpreadsheet() {
 }
 
 function handleAction(action, data) {
+  if (requiresAdminSession(action)) {
+    var auth = requireAdminSession(data);
+    if (!auth.success) return auth;
+  }
+
   switch (action) {
     case 'ping':              return { success: true, message: 'pong' };
     case 'testEmail':         return testEmailSystem(data);
@@ -115,8 +121,8 @@ function handleAction(action, data) {
     case 'getEmployee':       return getEmployee(data.email);
     case 'getEmployeeById':   return getEmployeeById(data.empId || data.id || data.employeeId);
     case 'getEmployeeEmail':  return getEmployeeEmail(data.empId || data.id || data.employeeId);
-    case 'getEmployees':      return getEmployees();
-    case 'getAllEmployees':   return getEmployees();
+    case 'getEmployees':      return getEmployees(data);
+    case 'getAllEmployees':   return getEmployees(data);
     case 'getEmployeesDirectory': return getEmployeesDirectory();
     case 'getBootstrapData':  return getBootstrapData(data);
     case 'addEmployee':       return addEmployee(data);
@@ -160,6 +166,41 @@ function handleAction(action, data) {
   }
 }
 
+function requiresAdminSession(action) {
+  var protectedActions = {
+    setup: true,
+    getHRProfiles: true,
+    addHRProfile: true,
+    updateHRProfile: true,
+    deleteHRProfile: true,
+    addEmployee: true,
+    updateEmployee: true,
+    resetEmployeePassword: true,
+    deleteEmployee: true,
+    addManager: true,
+    updateManager: true,
+    deleteManager: true,
+    saveProjects: true,
+    assignProject: true,
+    setupWorkDoneReminderTrigger: true
+  };
+  return !!protectedActions[action];
+}
+
+function makeAdminSessionToken(username) {
+  var token = Utilities.getUuid() + ':' + Utilities.getUuid();
+  CacheService.getScriptCache().put('adminSession:' + token, username || 'admin', 21600);
+  return token;
+}
+
+function requireAdminSession(data) {
+  var token = (data && (data.adminToken || data.sessionToken || data.token) || '').toString().trim();
+  if (!token) return { success: false, message: 'Admin authorization is required.' };
+  var cached = CacheService.getScriptCache().get('adminSession:' + token);
+  if (!cached) return { success: false, message: 'Admin session expired. Please sign in again.' };
+  return { success: true, username: cached };
+}
+
 function getBootstrapData(data) {
   data = data || {};
   var include = (data.include || '')
@@ -192,7 +233,11 @@ function getBootstrapData(data) {
   if (wants.leaves) out.leaves = readLeavesFast(ss, employees || readEmployeesFast(ss));
   if (wants.projects) out.projects = readProjectsFast(ss);
   if (wants.managers) out.managers = readManagersFast(ss);
-  if (wants.hrProfiles) out.hrProfiles = readHRProfilesFast(ss);
+  if (wants.hrProfiles) {
+    var hrAuth = requireAdminSession(data);
+    if (!hrAuth.success) return hrAuth;
+    out.hrProfiles = readHRProfilesFast(ss);
+  }
   if (wants.contractAlerts) out.contractAlerts = buildContractAlertsFast(employees || [], data.email, data.role);
   if (wants.missingLoginAlerts) out.missingLoginAlerts = readMissingLoginAlertsFast(ss, data);
   return out;
@@ -207,7 +252,7 @@ function readEmployeesFast(ss) {
   var employees = [];
   for (var i = 0; i < rows.length; i++) {
     if (rows[i][hdr['empid']] || rows[i][hdr['email']]) {
-      employees.push(buildEmployeeObject(rows[i], hdr, { includePassword: true }));
+      employees.push(buildEmployeeObject(rows[i], hdr));
     }
   }
   return employees;
@@ -501,19 +546,27 @@ function ensureContractAlertTrigger() {
 }
 
 function ensureWorkDoneReminderTrigger() {
-  var existing = ScriptApp.getProjectTriggers().some(function(trigger) {
+  var props = PropertiesService.getScriptProperties();
+  var triggerVersion = props.getProperty(WORK_DONE_REMINDER_TRIGGER_VERSION);
+  var existingTriggers = ScriptApp.getProjectTriggers().filter(function(trigger) {
     return trigger.getHandlerFunction() === 'sendWorkDoneReminderEmails';
   });
-  if (existing) {
-    return { success: true, message: 'Hourly work done reminder trigger already exists' };
+  if (triggerVersion === '1' && existingTriggers.length === 1) {
+    return { success: true, message: 'Hourly work done reminder trigger already exists at the top of the hour' };
   }
+
+  existingTriggers.forEach(function(trigger) {
+    ScriptApp.deleteTrigger(trigger);
+  });
 
   ScriptApp.newTrigger('sendWorkDoneReminderEmails')
     .timeBased()
     .everyHours(1)
+    .nearMinute(0)
     .create();
 
-  return { success: true, message: 'Hourly work done reminder trigger created' };
+  props.setProperty(WORK_DONE_REMINDER_TRIGGER_VERSION, '1');
+  return { success: true, message: 'Hourly work done reminder trigger created for the top of the hour' };
 }
 
 function styleHeaderRow(sheet, headerCount, backgroundColor) {
@@ -664,26 +717,15 @@ function adminLogin(data) {
   const username = (data.username || '').toString().trim();
   const password = (data.password || '').toString();
   if (!username || !password) return { success: false, message: 'Username and password are required' };
-  const defaultCreds = [
-    { username: 'admin', password: 'admin@123' },
-    { username: 'hr', password: 'hr@123' }
-  ];
-  const matchedDefault = defaultCreds.some(function(c) {
-    return c.username === username && c.password === password;
-  });
-  if (matchedDefault) return {
-    success: true,
-    message: 'Login successful',
-    profile: { username: username, name: username === 'hr' ? 'HR Administrator' : 'Admin', role: 'HR Administrator' }
-  };
-
   const ss = SpreadsheetApp.openById(SHEET_ID);
   let sheet = ss.getSheetByName('HRProfiles');
   if (!sheet) {
     setupSheets();
     sheet = ss.getSheetByName('HRProfiles');
   }
-  if (!sheet || sheet.getLastRow() < 2) return { success: false, message: 'Invalid username or password' };
+  if (!sheet || sheet.getLastRow() < 2) {
+    return bootstrapAdminLogin(username, password);
+  }
 
   const lastRow = sheet.getLastRow();
   const rows = sheet.getRange(2, 1, lastRow - 1, sheet.getLastColumn()).getValues();
@@ -699,6 +741,7 @@ function adminLogin(data) {
       return {
         success: true,
         message: 'Login successful',
+        adminToken: makeAdminSessionToken(rowUser),
         profile: {
           username: getValueByHeader(rows[i], hdr, 'username', 1) || username,
           name: getValueByHeader(rows[i], hdr, 'name', 3) || username,
@@ -712,10 +755,31 @@ function adminLogin(data) {
   return { success: false, message: 'Invalid username or password' };
 }
 
+function bootstrapAdminLogin(username, password) {
+  const defaultCreds = [
+    { username: 'admin', password: 'admin@123', name: 'Admin' },
+    { username: 'hr', password: 'hr@123', name: 'HR Administrator' }
+  ];
+  for (let i = 0; i < defaultCreds.length; i++) {
+    const cred = defaultCreds[i];
+    if (cred.username === username && cred.password === password) {
+      return {
+        success: true,
+        message: 'Bootstrap login successful. Create a real HR profile to disable default credentials.',
+        adminToken: makeAdminSessionToken(username),
+        profile: { username: username, name: cred.name, role: 'HR Administrator' },
+        bootstrap: true
+      };
+    }
+  }
+  return { success: false, message: 'Invalid username or password' };
+}
+
 function employeeLogin(data) {
   const email = normalizeEmail(data.email || '').toString().trim();
   const empId = (data.empId || data.id || data.employeeId || '').toString().trim().toUpperCase();
   const password = (data.password || '').toString();
+  const firebaseVerified = data.firebaseVerified === true || String(data.firebaseVerified || '').toLowerCase() === 'true';
   if (!email && !empId) return { success: false, message: 'Email or Employee ID is required' };
   if (!password) return { success: false, message: 'Password is required' };
 
@@ -756,10 +820,18 @@ function employeeLogin(data) {
         return { success: false, message: 'Your account is inactive. Please contact HR.' };
       }
       const storedPass = (getValueByHeader(rows[i], hdr, 'password', 2) || '').toString().trim();
-      if (storedPass && storedPass !== password) {
-        return { success: false, message: 'Incorrect password. Please try again.' };
+      const mustChangePassword = String(getValueByHeader(rows[i], hdr, 'mustchangepassword', -1) || '').toString().toUpperCase() === 'TRUE';
+      if (mustChangePassword) {
+        if (!storedPass) {
+          return { success: false, message: 'Temporary password is missing. Please contact HR.' };
+        }
+        if (storedPass !== password) {
+          return { success: false, message: 'Incorrect temporary password. Please try again.' };
+        }
+      } else if (!firebaseVerified) {
+        return { success: false, message: 'Please sign in with Firebase Auth to verify your password.' };
       }
-      return { success: true, employee: buildEmployeeObject(rows[i], hdr) };
+      return { success: true, employee: attachEmployeePortalRoles(buildEmployeeObject(rows[i], hdr), ss) };
     }
   }
 
@@ -1119,6 +1191,49 @@ function buildManagerObject(row, hdr) {
   };
 }
 
+function getEmployeePortalRoles(ss, email, employeeRole) {
+  const roles = [];
+  const seen = {};
+
+  function addRole(role) {
+    role = normalizeProductivityTrackerLabel((role || '').toString().trim());
+    if (!role) return;
+    const key = normalizeRoleKey(role);
+    if (seen[key]) return;
+    seen[key] = true;
+    roles.push(role);
+  }
+
+  if (hasProductivityTrackerRole(employeeRole)) {
+    addRole(PRODUCTIVITY_TRACKER_LABEL);
+  }
+
+  const normalizedEmail = normalizeEmail(email);
+  if (!normalizedEmail) return roles;
+
+  ensureManagerSchema(ss);
+  const managerSheet = ss.getSheetByName('Managers');
+  if (!managerSheet || managerSheet.getLastRow() < 2) return roles;
+
+  const hdr = getManagerHeaders(managerSheet);
+  const rows = managerSheet.getRange(2, 1, managerSheet.getLastRow() - 1, managerSheet.getLastColumn()).getValues();
+  for (let i = 0; i < rows.length; i++) {
+    const rowEmail = normalizeEmail(getValueByHeader(rows[i], hdr, 'email', 3));
+    if (rowEmail !== normalizedEmail) continue;
+    const managerType = getValueByHeader(rows[i], hdr, 'managertype', 1);
+    const managerRole = getValueByHeader(rows[i], hdr, 'role', 4);
+    addRole(managerType || managerRole);
+  }
+
+  return roles;
+}
+
+function attachEmployeePortalRoles(employee, ss) {
+  if (!employee) return employee;
+  employee.portalRoles = getEmployeePortalRoles(ss, employee.email, employee.role);
+  return employee;
+}
+
 function normalizeManagerTypeForMatch(value) {
   const normalized = normalizeRoleKey(normalizeProductivityTrackerLabel(value));
   if (normalized === 'reporting') return 'reporting manager';
@@ -1247,7 +1362,7 @@ function getEmployee(email) {
   for (let i = 0; i < rows.length; i++) {
     const rowEmail = normalizeEmail(getValueByHeader(rows[i], hdr, 'email', 1));
     if (rowEmail === wantedEmail) {
-      return { success: true, employee: buildEmployeeObject(rows[i], hdr) };
+      return { success: true, employee: attachEmployeePortalRoles(buildEmployeeObject(rows[i], hdr), ss) };
     }
   }
 
@@ -1298,14 +1413,14 @@ function getEmployeeById(empId) {
   for (let i = 0; i < rows.length; i++) {
     const rowId = String(getValueByHeader(rows[i], hdr, 'empid', 0) || '').trim().toLowerCase();
     if (rowId === wantedId) {
-      return { success: true, employee: buildEmployeeObject(rows[i], hdr) };
+      return { success: true, employee: attachEmployeePortalRoles(buildEmployeeObject(rows[i], hdr), ss) };
     }
   }
 
   return { success: false, message: 'Employee not found. Please contact your admin.' };
 }
 
-function getEmployees() {
+function getEmployees(data) {
   const ss = SpreadsheetApp.openById(SHEET_ID);
   ensureEmployeeSchema(ss);
   const sheet = ss.getSheetByName('Employees');
@@ -1316,10 +1431,11 @@ function getEmployees() {
   const rows = sheet.getRange(2, 1, lastRow - 1, sheet.getLastColumn()).getValues();
   const hdr = getEmpHeaders(sheet);
   const employees = [];
+  const includePassword = data && String(data.includePassword || '').toLowerCase() === 'true' && requireAdminSession(data).success;
 
   for (let i = 0; i < rows.length; i++) {
     if (rows[i][hdr['empid']] || rows[i][hdr['email']]) {
-      employees.push(buildEmployeeObject(rows[i], hdr, { includePassword: true }));
+      employees.push(buildEmployeeObject(rows[i], hdr, { includePassword: includePassword }));
     }
   }
 
@@ -1579,18 +1695,21 @@ function resetEmployeePassword(data) {
     SpreadsheetApp.flush();
     let emailed = false;
     try {
+      const safeEmployeeName = escapeEmailHtml(employeeName || 'there');
+      const safeEmail = escapeEmailHtml(email);
+      const safePassword = escapeEmailHtml(newPassword);
       MailApp.sendEmail({
         to: email,
         subject: 'AttendPro — Your password has been reset',
         htmlBody: '<div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;padding:24px;background:#0f172a;color:#f1f5f9;border-radius:12px;">'
           + '<h2 style="color:#f0abfc;margin:0 0 8px;">AttendPro · Password Reset</h2>'
-          + '<p style="color:#cbd5e1;">Hi ' + (employeeName || 'there') + ',</p>'
+          + '<p style="color:#cbd5e1;">Hi ' + safeEmployeeName + ',</p>'
           + '<p style="color:#cbd5e1;">Your AttendPro password has been reset. Use the credentials below to sign in:</p>'
           + '<div style="background:#1e293b;padding:16px 20px;border-radius:10px;margin:16px 0;">'
           + '<div style="color:#94a3b8;font-size:13px;">Email</div>'
-          + '<div style="color:#fde68a;font-weight:600;margin-bottom:10px;">' + email + '</div>'
+          + '<div style="color:#fde68a;font-weight:600;margin-bottom:10px;">' + safeEmail + '</div>'
           + '<div style="color:#94a3b8;font-size:13px;">New Password</div>'
-          + '<div style="color:#fde68a;font-weight:700;font-size:18px;letter-spacing:2px;">' + newPassword + '</div>'
+          + '<div style="color:#fde68a;font-weight:700;font-size:18px;letter-spacing:2px;">' + safePassword + '</div>'
           + '</div>'
           + '<p style="color:#94a3b8;font-size:13px;">Please sign in and change your password from the profile menu.</p>'
           + '</div>'

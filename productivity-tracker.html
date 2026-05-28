@@ -1048,6 +1048,9 @@
       renderProjects();
       renderAttendanceLog();
       renderTrackerMonitor();
+      if(localProjects.length || localEmployees.length || localAttendance.length || localLeaves.length) {
+        hideLoadingOverlay();
+      }
       const [projRes,empRes,attRes,lvRes]=await Promise.all([
           callAPI('getProjects',{},false),
           callAPI('getEmployees',{},false),
